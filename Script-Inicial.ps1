@@ -1,6 +1,6 @@
 # ==============================================================================
 # SETUP-01 - HORUS TI SOLUCOES
-# Versao: 0.0.5
+# Versao: 0.0.6
 # Requer: PowerShell como Administrador
 # Antes de executar: Set-ExecutionPolicy Bypass -Scope Process -Force
 # ==============================================================================
@@ -13,6 +13,116 @@ Clear-Host
 # Compativel com Windows 10/11 e qualquer maquina sem configuracao previa
 # ==============================================================================
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# ==============================================================================
+# SEGURANÇA — VERIFICACAO DE GEOLOCALIZAÇÃO POR IP
+#
+# Bloqueia a execução do script fora do Brasil.
+# Usa duas APIs publicas sem necessidade de chave:
+#   - Primaria : ip-api.com   (1000 req/hora gratis)
+#   - Fallback  : ipwho.is    (ilimitado, sem cadastro)
+#
+# LIMITAÇÕES CONHECIDAS (documente para a equipe):
+#   - VPN com IP brasileiro passa normalmente
+#   - Alguns IPs corporativos podem aparecer como outro pais
+#   - Se AMBAS as APIs falharem (sem internet), o script É bloqueado
+#     por segurança — mude $BlockOnApiFailure para $false se preferir
+#     liberar quando não conseguir verificar
+#
+# Para adicionar mais países permitidos, inclua o código ISO em $AllowedCountries
+# Ex: @("BR", "PT") para Brasil e Portugal
+# ==============================================================================
+$AllowedCountries   = @("BR")      # códigos ISO 3166-1 alpha-2 permitidos
+$BlockOnApiFailure  = $true        # $true = bloqueia se a API não responder
+
+function Test-AllowedCountry {
+    $detectedCountry = $null
+    $detectedIP      = $null
+    $apiUsed         = $null
+
+    # --- API primária: ip-api.com ---
+    try {
+        $response = Invoke-RestMethod `
+            -Uri "http://ip-api.com/json/?fields=status,country,countryCode,query" `
+            -TimeoutSec 8 `
+            -ErrorAction Stop
+
+        if ($response.status -eq "success" -and $response.countryCode) {
+            $detectedCountry = $response.countryCode.ToUpper()
+            $detectedIP      = $response.query
+            $apiUsed         = "ip-api.com"
+        }
+    } catch {
+        # API primária falhou — tenta fallback
+    }
+
+    # --- API fallback: ipwho.is ---
+    if (-not $detectedCountry) {
+        try {
+            $response = Invoke-RestMethod `
+                -Uri "https://ipwho.is/" `
+                -TimeoutSec 8 `
+                -ErrorAction Stop
+
+            if ($response.success -and $response.country_code) {
+                $detectedCountry = $response.country_code.ToUpper()
+                $detectedIP      = $response.ip
+                $apiUsed         = "ipwho.is"
+            }
+        } catch {
+            # Fallback também falhou
+        }
+    }
+
+    # --- Avalia o resultado ---
+    if (-not $detectedCountry) {
+        if ($BlockOnApiFailure) {
+            Write-Host ""
+            Write-Host "--------------------------------------------------------------" -ForegroundColor Red
+            Write-Host "  VERIFICACAO DE LOCALIZACAO FALHOU" -ForegroundColor Red
+            Write-Host "--------------------------------------------------------------" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "  Nao foi possivel verificar o pais de origem." -ForegroundColor Yellow
+            Write-Host "  Verifique sua conexao com a internet e tente novamente." -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  Se o problema persistir, contate o suporte HTI." -ForegroundColor White
+            Write-Host ""
+            Start-Sleep -Seconds 3
+            exit
+        } else {
+            # Modo permissivo: avisa mas continua
+            Write-Host "AVISO: Nao foi possivel verificar localizacao. Continuando..." -ForegroundColor Yellow
+            return
+        }
+    }
+
+    if ($AllowedCountries -contains $detectedCountry) {
+        # País autorizado — continua silenciosamente
+        # (remova o comentário abaixo se quiser ver a confirmação)
+        # Write-Host "Localizacao verificada: $detectedCountry ($detectedIP)" -ForegroundColor DarkGreen
+        return
+    }
+
+    # --- País NÃO autorizado ---
+    Write-Host ""
+    Write-Host "--------------------------------------------------------------" -ForegroundColor Red
+    Write-Host "  ACESSO NEGADO — LOCALIZACAO NAO AUTORIZADA" -ForegroundColor Red
+    Write-Host "--------------------------------------------------------------" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Pais detectado  : $detectedCountry" -ForegroundColor Yellow
+    Write-Host "  IP detectado    : $detectedIP"      -ForegroundColor Yellow
+    Write-Host "  Paises permitidos: $($AllowedCountries -join ', ')" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  Este script so pode ser executado no Brasil." -ForegroundColor White
+    Write-Host "  Se voce esta no Brasil e vendo este erro," -ForegroundColor White
+    Write-Host "  pode estar usando uma VPN com IP estrangeiro." -ForegroundColor White
+    Write-Host ""
+    Start-Sleep -Seconds 3
+    exit
+}
+
+# Executa a verificação antes de qualquer outra coisa
+Test-AllowedCountry
 
 # ==============================================================================
 # CONFIGURACAO CENTRAL
@@ -1590,6 +1700,10 @@ function Show-Changelog {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "                  HISTORICO DE ALTERACOES" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
+    Write-Host "[v0.0.6] - Verificacao de geolocalizacao por IP: bloqueia execucao fora do Brasil"
+    Write-Host "[v0.0.6] - Duas APIs de fallback (ip-api.com + ipwho.is) sem necessidade de chave"
+    Write-Host "[v0.0.6] - Parametro BlockOnApiFailure: bloqueia se API nao responder (padrao: true)"
+    Write-Host "[v0.0.6] - Parametro AllowedCountries: lista de paises permitidos (padrao: BR)"
     Write-Host "[v0.0.5] - Java 32/64: Winget como metodo principal, Adoptium como fallback, site como ultimo recurso"
     Write-Host "[v0.0.5] - PJe Office: lista de URLs alternativas com fallback automatico para site oficial"
     Write-Host "[v0.0.5] - Removidas URLs do Oracle (BundleId muda a cada versao e quebra o download)"
@@ -1643,7 +1757,7 @@ function Main {
         Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
         Write-Host "                  HORUS TI SOLUCOES" -ForegroundColor White
         Write-Host "--------------------------------------------------------------`n" -ForegroundColor Blue
-        Write-Host "Versao: 0.0.5`n" -ForegroundColor DarkGray
+        Write-Host "Versao: 0.0.6`n" -ForegroundColor DarkGray
 
         Write-Host "1)  Exibir Informacoes do Windows"                              -ForegroundColor Green
         Write-Host "2)  Renomear o computador"                                      -ForegroundColor Green
