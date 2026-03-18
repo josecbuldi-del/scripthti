@@ -1,6 +1,6 @@
 # ==============================================================================
 # SETUP-01 - HORUS TI SOLUCOES
-# Versao: 0.0.4
+# Versao: 0.0.5
 # Requer: PowerShell como Administrador
 # Antes de executar: Set-ExecutionPolicy Bypass -Scope Process -Force
 # ==============================================================================
@@ -646,61 +646,133 @@ function Install-LegalPackage {
 
         # ------------------------------------------------------------------
         # CASE A - Java 32 bits
+        # Estrategia: tenta Winget primeiro (mais confiavel), depois
+        # download direto como fallback, e por ultimo abre o site.
+        # O BundleId do Oracle muda a cada versao — por isso o Winget
+        # e preferido pois sempre busca a versao mais atual.
         # ------------------------------------------------------------------
         "A" {
-            Write-Host "`nBaixando e instalando Java 32 bits (JRE)..." -ForegroundColor Cyan
-            try {
-                $javaPath = Join-Path $ProgramsPath "java32.exe"
-                $javaUrl  = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=249552_4d245f941845490c91360409ecffb3b4"
-                Write-Host "Baixando..." -ForegroundColor Yellow
-                Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
-                Write-Host "Instalando (silencioso)..." -ForegroundColor Yellow
-                Safe-StartProcess -FilePath $javaPath -Arguments "/s"
-                Write-Host "Java 32 bits instalado com sucesso!" -ForegroundColor Green
-            } catch {
-                Write-Host "Erro ao instalar Java 32 bits: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "Tente manualmente em: https://www.java.com/pt-BR/download/" -ForegroundColor Yellow
+            Write-Host "`nInstalando Java 32 bits (JRE)..." -ForegroundColor Cyan
+
+            # Tentativa 1: Winget (metodo mais confiavel e sempre atualizado)
+            if (Check-WingetInstalled) {
+                Write-Host "Tentando via Winget..." -ForegroundColor Yellow
+                try {
+                    $result = winget install --id Oracle.JavaRuntimeEnvironment -e --silent --architecture x86 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "Java 32 bits instalado via Winget!" -ForegroundColor Green
+                        pause; Install-LegalPackage; return
+                    }
+                } catch {}
+                Write-Host "Winget nao encontrou. Tentando download direto..." -ForegroundColor Yellow
             }
+
+            # Tentativa 2: Download direto via Adoptium (OpenJDK - sempre disponivel)
+            try {
+                $javaPath = Join-Path $ProgramsPath "java32.msi"
+                # Adoptium (Eclipse Foundation) - URL estavel para JRE 32 bits
+                $javaUrl  = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.11%2B9/OpenJDK17U-jre_x86-32_windows_hotspot_17.0.11_9.msi"
+                Write-Host "Baixando OpenJDK 17 JRE 32 bits (Adoptium)..." -ForegroundColor Yellow
+                Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
+                Write-Host "Instalando..." -ForegroundColor Yellow
+                Safe-StartProcess -FilePath "msiexec.exe" -Arguments "/i `"$javaPath`" /quiet /norestart"
+                Write-Host "Java 32 bits instalado com sucesso!" -ForegroundColor Green
+                pause; Install-LegalPackage; return
+            } catch {
+                Write-Host "Download direto falhou: $($_.Exception.Message)" -ForegroundColor Red
+            }
+
+            # Fallback final: abre o site para download manual
+            Write-Host "`nNao foi possivel instalar automaticamente." -ForegroundColor Red
+            Write-Host "Abrindo pagina de download manual..." -ForegroundColor Yellow
+            Start-Process "https://www.java.com/pt-BR/download/manual.jsp"
+            Write-Host "Escolha 'Windows Offline (32 bits)' na pagina que abriu." -ForegroundColor Cyan
             pause; Install-LegalPackage
         }
 
         # ------------------------------------------------------------------
         # CASE B - Java 64 bits
+        # Mesma estrategia do Java 32: Winget > Adoptium > site manual
         # ------------------------------------------------------------------
         "B" {
-            Write-Host "`nBaixando e instalando Java 64 bits (JRE)..." -ForegroundColor Cyan
-            try {
-                $javaPath = Join-Path $ProgramsPath "java64.exe"
-                $javaUrl  = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=249554_4d245f941845490c91360409ecffb3b4"
-                Write-Host "Baixando..." -ForegroundColor Yellow
-                Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
-                Write-Host "Instalando (silencioso)..." -ForegroundColor Yellow
-                Safe-StartProcess -FilePath $javaPath -Arguments "/s"
-                Write-Host "Java 64 bits instalado com sucesso!" -ForegroundColor Green
-            } catch {
-                Write-Host "Erro ao instalar Java 64 bits: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "Tente manualmente em: https://www.java.com/pt-BR/download/" -ForegroundColor Yellow
+            Write-Host "`nInstalando Java 64 bits (JRE)..." -ForegroundColor Cyan
+
+            # Tentativa 1: Winget
+            if (Check-WingetInstalled) {
+                Write-Host "Tentando via Winget..." -ForegroundColor Yellow
+                try {
+                    $result = winget install --id Oracle.JavaRuntimeEnvironment -e --silent --architecture x64 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "Java 64 bits instalado via Winget!" -ForegroundColor Green
+                        pause; Install-LegalPackage; return
+                    }
+                } catch {}
+                Write-Host "Winget nao encontrou. Tentando download direto..." -ForegroundColor Yellow
             }
+
+            # Tentativa 2: Download direto via Adoptium (OpenJDK)
+            try {
+                $javaPath = Join-Path $ProgramsPath "java64.msi"
+                $javaUrl  = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.11%2B9/OpenJDK17U-jre_x64_windows_hotspot_17.0.11_9.msi"
+                Write-Host "Baixando OpenJDK 17 JRE 64 bits (Adoptium)..." -ForegroundColor Yellow
+                Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
+                Write-Host "Instalando..." -ForegroundColor Yellow
+                Safe-StartProcess -FilePath "msiexec.exe" -Arguments "/i `"$javaPath`" /quiet /norestart"
+                Write-Host "Java 64 bits instalado com sucesso!" -ForegroundColor Green
+                pause; Install-LegalPackage; return
+            } catch {
+                Write-Host "Download direto falhou: $($_.Exception.Message)" -ForegroundColor Red
+            }
+
+            # Fallback final: site manual
+            Write-Host "`nNao foi possivel instalar automaticamente." -ForegroundColor Red
+            Write-Host "Abrindo pagina de download manual..." -ForegroundColor Yellow
+            Start-Process "https://www.java.com/pt-BR/download/manual.jsp"
+            Write-Host "Escolha 'Windows Offline (64 bits)' na pagina que abriu." -ForegroundColor Cyan
             pause; Install-LegalPackage
         }
 
         # ------------------------------------------------------------------
         # CASE C - PJe Office Pro
+        # O PJe tem URLs que mudam com frequencia. A estrategia e:
+        # 1) Tenta a URL oficial mais recente conhecida
+        # 2) Tenta URL alternativa do CNJ
+        # 3) Abre o site oficial para download manual
         # ------------------------------------------------------------------
         "C" {
-            Write-Host "`nBaixando e instalando PJe Office Pro..." -ForegroundColor Cyan
-            try {
-                $pjePath = Join-Path $ProgramsPath "PjeOffice.exe"
-                $pjeUrl  = "https://www.pje.jus.br/wiki/images/PjeOffice-win64.exe"
-                Write-Host "Baixando..." -ForegroundColor Yellow
-                Invoke-WebRequest -Uri $pjeUrl -OutFile $pjePath -UseBasicParsing -EA Stop
-                Write-Host "Iniciando instalacao..." -ForegroundColor Yellow
-                Safe-StartProcess -FilePath $pjePath -NoNewWindow $false
-                Write-Host "PJe Office Pro instalado com sucesso!" -ForegroundColor Green
-            } catch {
-                Write-Host "Erro ao baixar PJe Office: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "Baixe manualmente em: https://www.pje.jus.br/wiki/index.php/PjeOffice" -ForegroundColor Yellow
+            Write-Host "`nInstalando PJe Office Pro..." -ForegroundColor Cyan
+
+            $pjePath = Join-Path $ProgramsPath "PjeOffice.exe"
+            $instalado = $false
+
+            # Lista de URLs para tentar em ordem (atualize se uma quebrar)
+            $pjeUrls = @(
+                "https://www.pje.jus.br/pjeoffice/PjeOffice-Setup-Win-x64.exe",
+                "https://www.cnj.jus.br/pje-office/PjeOffice-Setup-Win-x64.exe",
+                "https://pje.cnj.jus.br/pjeoffice/PjeOffice-Setup-Win-x64.exe"
+            )
+
+            foreach ($url in $pjeUrls) {
+                Write-Host "Tentando: $url" -ForegroundColor Yellow
+                try {
+                    Invoke-WebRequest -Uri $url -OutFile $pjePath -UseBasicParsing -TimeoutSec 30 -EA Stop
+                    Write-Host "Download concluido. Iniciando instalacao..." -ForegroundColor Green
+                    Safe-StartProcess -FilePath $pjePath -Wait $true -NoNewWindow $false
+                    Write-Host "PJe Office Pro instalado com sucesso!" -ForegroundColor Green
+                    $instalado = $true
+                    break
+                } catch {
+                    Write-Host "URL indisponivel: $($_.Exception.Message)" -ForegroundColor DarkGray
+                }
             }
+
+            if (-not $instalado) {
+                Write-Host "`nNao foi possivel baixar automaticamente." -ForegroundColor Red
+                Write-Host "Abrindo pagina oficial do PJe Office..." -ForegroundColor Yellow
+                Start-Process "https://www.pje.jus.br/wiki/index.php/PjeOffice"
+                Write-Host "Faca o download manualmente na pagina que abriu." -ForegroundColor Cyan
+            }
+
             pause; Install-LegalPackage
         }
 
@@ -1518,6 +1590,9 @@ function Show-Changelog {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "                  HISTORICO DE ALTERACOES" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
+    Write-Host "[v0.0.5] - Java 32/64: Winget como metodo principal, Adoptium como fallback, site como ultimo recurso"
+    Write-Host "[v0.0.5] - PJe Office: lista de URLs alternativas com fallback automatico para site oficial"
+    Write-Host "[v0.0.5] - Removidas URLs do Oracle (BundleId muda a cada versao e quebra o download)"
     Write-Host "[v0.0.4] - TLS 1.2 forcado globalmente em todos os downloads"
     Write-Host "[v0.0.4] - Senha de acesso protegida por hash SHA256 (sem texto claro)"
     Write-Host "[v0.0.4] - Senha lida como SecureString e limpa da memoria apos uso"
@@ -1568,7 +1643,7 @@ function Main {
         Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
         Write-Host "                  HORUS TI SOLUCOES" -ForegroundColor White
         Write-Host "--------------------------------------------------------------`n" -ForegroundColor Blue
-        Write-Host "Versao: 0.0.4`n" -ForegroundColor DarkGray
+        Write-Host "Versao: 0.0.5`n" -ForegroundColor DarkGray
 
         Write-Host "1)  Exibir Informacoes do Windows"                              -ForegroundColor Green
         Write-Host "2)  Renomear o computador"                                      -ForegroundColor Green
