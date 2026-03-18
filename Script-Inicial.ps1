@@ -765,10 +765,20 @@ function Install-Office {
     Clear-Host
 }
 
+# =========================
+# ATIVACAO WINDOWS / OFFICE  <-- ALTERADO
+# =========================
+
 function Activate-WindowsOffice {
     try {
-        Write-Host "`nDeseja abrir as ferramentas oficiais de ativacao do Windows e Office? [S/n]" -ForegroundColor Yellow
-        $confirm = Read-Host "(Pressione Enter para SIM)"
+        Clear-Host
+        Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
+        Write-Host "         Ativacao do Windows e Office" -ForegroundColor Cyan
+        Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
+        Write-Host "Esta opcao executa a ferramenta de ativacao Microsoft Activation Scripts." -ForegroundColor Yellow
+        Write-Host "Fonte: https://get.activated.win`n" -ForegroundColor DarkGray
+
+        $confirm = Read-Host "Deseja iniciar o processo de ativacao? [S/n] (Pressione Enter para SIM)"
         if ($confirm -and $confirm -notmatch "^[Ss]$") {
             Write-Host "`nOperacao cancelada pelo usuario. Retornando ao menu principal..." -ForegroundColor Red
             Start-Sleep -Seconds 2
@@ -776,17 +786,15 @@ function Activate-WindowsOffice {
             return
         }
 
-        Write-Host "`nAbrindo Configuracoes de Ativacao do Windows..." -ForegroundColor Cyan
-        Start-Process "ms-settings:activation"
+        Write-Host "`nIniciando o processo de ativacao..." -ForegroundColor Cyan
+        irm https://get.activated.win | iex
 
-        Write-Host "Abrindo portal de conta do Microsoft 365..." -ForegroundColor Cyan
-        Start-Process "https://portal.office.com/account/"
-
-        Write-Host "`nFinalize manualmente a ativacao conforme o licenciamento da organizacao." -ForegroundColor Yellow
+        Write-Host "`nFinalize a ativacao conforme as instrucoes apresentadas na tela." -ForegroundColor Yellow
         Write-Host "`nPressione qualquer tecla para retornar ao menu principal..." -ForegroundColor Cyan
         $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     } catch {
-        Write-Host "Ocorreu um erro durante a abertura das ferramentas de ativacao: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Ocorreu um erro durante o processo de ativacao: $($_.Exception.Message)" -ForegroundColor Red
+        pause
     }
     Clear-Host
 }
@@ -1777,8 +1785,7 @@ function Gerenciar-AnyDesk {
 
             Write-Host "`nInstalando o AnyDesk v7..." -ForegroundColor Cyan
             try {
-                $argumentos = "/S /U=1"
-                Start-Process -FilePath $arquivo -ArgumentList $argumentos -Wait -NoNewWindow
+                Start-Process -FilePath $arquivo -ArgumentList "/S /U=1" -Wait -NoNewWindow
                 Write-Host "AnyDesk instalado com sucesso!" -ForegroundColor Green
                 pause
                 Gerenciar-AnyDesk
@@ -1985,6 +1992,7 @@ function Show-Changelog {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "                  HISTORICO DE ALTERACOES" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
+    Write-Host "[v0.8.1] - Opcao 9 alterada para usar ativador via irm get.activated.win"
     Write-Host "[v0.8.0] - Migrado para GitHub raw nas rotinas de download"
     Write-Host "[v0.7.5] - Adicionado reset de rede do Windows"
     Write-Host "[v0.7.4] - Adicionada checagem de integridade do sistema"
@@ -1995,6 +2003,10 @@ function Show-Changelog {
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     Main
 }
+
+# =========================
+# MENU PRINCIPAL  <-- CABEÇALHO HTI ADICIONADO
+# =========================
 
 function Main {
     Clear-Host
@@ -2009,10 +2021,19 @@ function Main {
     }
 
     do {
-        Write-Host "`n--------------------------------------------------------------" -ForegroundColor Blue
+        Clear-Host
+        Write-Host ""
+        Write-Host "  ██╗  ██╗████████╗██╗" -ForegroundColor Cyan
+        Write-Host "  ██║  ██║╚══██╔══╝██║" -ForegroundColor Cyan
+        Write-Host "  ███████║   ██║   ██║" -ForegroundColor Cyan
+        Write-Host "  ██╔══██║   ██║   ██║" -ForegroundColor Cyan
+        Write-Host "  ██║  ██║   ██║   ██║" -ForegroundColor Cyan
+        Write-Host "  ╚═╝  ╚═╝   ╚═╝   ╚═╝" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
         Write-Host "             SETUP-01 - HORUS TI SOLUCOES" -ForegroundColor Cyan
         Write-Host "--------------------------------------------------------------`n" -ForegroundColor Blue
-        Write-Host "Versao: 0.8.0`n" -ForegroundColor DarkGray
+        Write-Host "Versao: 0.8.1`n" -ForegroundColor DarkGray
         Write-Host "1) Exibir Informacoes do Windows" -ForegroundColor Green
         Write-Host "2) Renomear o computador" -ForegroundColor Green
         Write-Host "3) Instalacao do agente TiFlux" -ForegroundColor Green
@@ -2021,7 +2042,7 @@ function Main {
         Write-Host "6) Instalacao do pacote de programas juridicos - PENDENTE" -ForegroundColor DarkGray
         Write-Host "7) Instalacao do pacote de programas contabeis - PENDENTE" -ForegroundColor DarkGray
         Write-Host "8) Instalacao do Office" -ForegroundColor Green
-        Write-Host "9) Ativacao do Windows e Office (oficial)" -ForegroundColor Green
+        Write-Host "9) Ativacao do Windows e Office" -ForegroundColor Green
         Write-Host "10) Remove Apps desnecessarios" -ForegroundColor Green
         Write-Host "11) Baixar aplicativos utilitarios {DiskUse, BSOD, Sysinternals...}" -ForegroundColor Green
         Write-Host "12) Gerenciador de Usuarios Locais" -ForegroundColor Green
