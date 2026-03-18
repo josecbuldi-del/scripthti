@@ -1,1 +1,11 @@
-
+https://setup.horus.net.br/Utilitarios/AnyDesk-v7.exe
+https://setup.horus.net.br/Utilitarios/Autoruns64.exe
+https://setup.horus.net.br/Utilitarios/DiskUse.exe
+https://setup.horus.net.br/Utilitarios/procexp64.exe
+https://setup.horus.net.br/Utilitarios/winbox64.exe
+https://setup.horus.net.br/Utilitarios/BlueScreenView.exe
+https://setup.horus.net.br/Utilitarios/cpuz_x64.exe
+https://setup.horus.net.br/Utilitarios/Deletar_Pasta_Bloqueada.exe
+https://setup.horus.net.br/Utilitarios/HWMonitor_x64.exe
+https://setup.horus.net.br/Utilitarios/tcpview64.exe
+https://setup.horus.net.br/Utilitarios/CrystalDiskInfo9_7_0.zip
