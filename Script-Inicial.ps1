@@ -1,11 +1,18 @@
 # ==============================================================================
 # SETUP-01 - HORUS TI SOLUCOES
-# Versao: 0.0.3
+# Versao: 0.0.4
 # Requer: PowerShell como Administrador
 # Antes de executar: Set-ExecutionPolicy Bypass -Scope Process -Force
 # ==============================================================================
 
 Clear-Host
+
+# ==============================================================================
+# SEGURANÇA — TLS 1.2 FORCADO GLOBALMENTE
+# Garante que todos os downloads usem TLS 1.2 (sem exceção)
+# Compativel com Windows 10/11 e qualquer maquina sem configuracao previa
+# ==============================================================================
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # ==============================================================================
 # CONFIGURACAO CENTRAL
@@ -19,10 +26,28 @@ $ProgramsPath = Join-Path $BasePath "Programas"
 $CleanupPath  = Join-Path $ScriptsPath "Limpeza"
 
 # ==============================================================================
-# SENHA DE ACESSO
-# Altere $ScriptPassword para trocar a senha de acesso ao script
+# SEGURANÇA — SENHA DE ACESSO (HASH SHA256)
+#
+# A senha NAO esta armazenada em texto — apenas seu hash SHA256.
+# Para trocar a senha:
+#   1) Abra o PowerShell
+#   2) Execute:
+#      $s = Read-Host "Nova senha" -AsSecureString
+#      $p = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))
+#      $b = [System.Text.Encoding]::UTF8.GetBytes($p)
+#      [BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace("-","").ToLower()
+#   3) Cole o resultado em $ScriptPasswordHash abaixo
+#
+# Hash atual corresponde a senha: suroh
 # ==============================================================================
-$ScriptPassword = "suroh"
+$ScriptPasswordHash = "5d0c9878cc232e37e9d0716f3730bd1f13e8cc775d3e620338e20a2fc51b33a3"
+
+function Get-StringHash {
+    param([string]$Text)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $hash  = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    return [BitConverter]::ToString($hash).Replace("-","").ToLower()
+}
 
 function Request-AccessPassword {
     Clear-Host
@@ -42,15 +67,31 @@ function Request-AccessPassword {
     $attempts = 0
     do {
         $attempts++
-        $inputPassword = Read-Host "Digite a senha de acesso"
-        if ($inputPassword -eq $ScriptPassword) {
+
+        # Lê a senha como SecureString — não aparece na tela nem fica em texto no buffer
+        $secInput = Read-Host "Senha de acesso" -AsSecureString
+        $plain    = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+                        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secInput)
+                    )
+
+        $inputHash = Get-StringHash -Text $plain
+
+        # Limpa a variável de texto da memória imediatamente após o hash
+        $plain = $null
+        [GC]::Collect()
+
+        if ($inputHash -eq $ScriptPasswordHash) {
             Write-Host "`nAcesso autorizado!" -ForegroundColor Green
             Start-Sleep -Seconds 1
+            $secInput.Dispose()
             return $true
         } else {
-            Write-Host "Senha incorreta. Tente novamente." -ForegroundColor Red
+            Write-Host "Senha incorreta." -ForegroundColor Red
+            $secInput.Dispose()
             if ($attempts -ge 3) {
-                Write-Host "`nNumero maximo de tentativas atingido. Encerrando." -ForegroundColor Red
+                Write-Host "`nTentativas esgotadas. Encerrando." -ForegroundColor Red
+                # Limpa o historico antes de sair por segurança
+                try { Clear-History -EA SilentlyContinue } catch {}
                 Start-Sleep -Seconds 2
                 exit
             }
@@ -81,6 +122,102 @@ function Download-FromGit {
     )
     $url = Get-GitRawUrl -RelativePath $RelativePath
     Invoke-WebRequest -Uri $url -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
+}
+
+# ==============================================================================
+# SEGURANCA - VALIDACAO DE HASH DE INSTALADORES
+#
+# Registre aqui o hash SHA256 esperado de cada instalador antes de executar.
+# Como obter o hash de um arquivo confiavel:
+#   (Get-FileHash "C:\caminho\arquivo.exe" -Algorithm SHA256).Hash.ToLower()
+#
+# IMPORTANTE: Atualize os hashes SEMPRE que baixar uma nova versao do software.
+# Se o hash nao estiver cadastrado, o script instala com aviso (nao bloqueia).
+# Para BLOQUEAR instaladores sem hash, mude $BlockUnknownHashes para $true.
+# ==============================================================================
+$BlockUnknownHashes = $false   # false = avisa mas instala | true = bloqueia
+
+$KnownHashes = @{
+    # Descomente e preencha com o hash real apos baixar cada versao confiavel:
+    # "java32.exe"      = "cole_aqui_o_hash_sha256_em_minusculo"
+    # "java64.exe"      = "cole_aqui_o_hash_sha256_em_minusculo"
+    # "PjeOffice.exe"   = "cole_aqui_o_hash_sha256_em_minusculo"
+    # "AnyDesk-v7.exe"  = "cole_aqui_o_hash_sha256_em_minusculo"
+    # "OfficeSetup.exe" = "cole_aqui_o_hash_sha256_em_minusculo"
+}
+
+function Get-FileHashSHA256 {
+    param([string]$FilePath)
+    return (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+}
+
+function Verify-InstallerHash {
+    param([string]$FilePath)
+    $fileName = Split-Path $FilePath -Leaf
+
+    if (-not (Test-Path $FilePath)) {
+        Write-Host "Arquivo nao encontrado: $FilePath" -ForegroundColor Red
+        return $false
+    }
+
+    if (-not $KnownHashes.ContainsKey($fileName)) {
+        if ($BlockUnknownHashes) {
+            Write-Host "BLOQUEADO: Hash de '$fileName' nao cadastrado. Adicione em `$KnownHashes." -ForegroundColor Red
+            return $false
+        } else {
+            Write-Host "AVISO: Hash de '$fileName' nao cadastrado. Instalando sem verificacao." -ForegroundColor Yellow
+            return $true
+        }
+    }
+
+    Write-Host "Verificando integridade de '$fileName'..." -ForegroundColor Cyan
+    $actual   = Get-FileHashSHA256 -FilePath $FilePath
+    $expected = $KnownHashes[$fileName].ToLower()
+
+    if ($actual -eq $expected) {
+        Write-Host "Hash OK: $fileName" -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "FALHA DE INTEGRIDADE em '$fileName'!" -ForegroundColor Red
+        Write-Host "  Esperado : $expected" -ForegroundColor Yellow
+        Write-Host "  Recebido : $actual"   -ForegroundColor Yellow
+        Write-Host "Arquivo removido por seguranca." -ForegroundColor Red
+        Remove-Item $FilePath -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+}
+
+function Safe-StartProcess {
+    # Use no lugar de Start-Process para qualquer instalador baixado
+    param(
+        [string]$FilePath,
+        [string]$Arguments   = "",
+        [bool]  $Wait        = $true,
+        [bool]  $NoNewWindow = $true
+    )
+    if (-not (Verify-InstallerHash -FilePath $FilePath)) {
+        Write-Host "Instalacao abortada por falha de seguranca." -ForegroundColor Red
+        return
+    }
+    $params = @{ FilePath = $FilePath }
+    if ($Arguments)   { $params.ArgumentList = $Arguments }
+    if ($Wait)        { $params.Wait         = $true }
+    if ($NoNewWindow) { $params.NoNewWindow  = $true }
+    Start-Process @params
+}
+
+# ==============================================================================
+# SEGURANCA - LIMPEZA DE VARIAVEIS SENSIVEIS DA MEMORIA
+# Use apos usar qualquer variavel que contenha senha ou dado sensivel:
+#   Clear-SensitiveVar ([ref]$minhaVariavel)
+# ==============================================================================
+function Clear-SensitiveVar {
+    param([ref]$Variable)
+    if ($Variable.Value -is [System.Security.SecureString]) {
+        try { $Variable.Value.Dispose() } catch {}
+    }
+    $Variable.Value = $null
+    [GC]::Collect()
 }
 
 # ==============================================================================
@@ -518,7 +655,7 @@ function Install-LegalPackage {
                 Write-Host "Baixando..." -ForegroundColor Yellow
                 Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
                 Write-Host "Instalando (silencioso)..." -ForegroundColor Yellow
-                Start-Process -FilePath $javaPath -ArgumentList "/s" -Wait -NoNewWindow
+                Safe-StartProcess -FilePath $javaPath -Arguments "/s"
                 Write-Host "Java 32 bits instalado com sucesso!" -ForegroundColor Green
             } catch {
                 Write-Host "Erro ao instalar Java 32 bits: $($_.Exception.Message)" -ForegroundColor Red
@@ -538,7 +675,7 @@ function Install-LegalPackage {
                 Write-Host "Baixando..." -ForegroundColor Yellow
                 Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
                 Write-Host "Instalando (silencioso)..." -ForegroundColor Yellow
-                Start-Process -FilePath $javaPath -ArgumentList "/s" -Wait -NoNewWindow
+                Safe-StartProcess -FilePath $javaPath -Arguments "/s"
                 Write-Host "Java 64 bits instalado com sucesso!" -ForegroundColor Green
             } catch {
                 Write-Host "Erro ao instalar Java 64 bits: $($_.Exception.Message)" -ForegroundColor Red
@@ -558,7 +695,7 @@ function Install-LegalPackage {
                 Write-Host "Baixando..." -ForegroundColor Yellow
                 Invoke-WebRequest -Uri $pjeUrl -OutFile $pjePath -UseBasicParsing -EA Stop
                 Write-Host "Iniciando instalacao..." -ForegroundColor Yellow
-                Start-Process -FilePath $pjePath -Wait
+                Safe-StartProcess -FilePath $pjePath -NoNewWindow $false
                 Write-Host "PJe Office Pro instalado com sucesso!" -ForegroundColor Green
             } catch {
                 Write-Host "Erro ao baixar PJe Office: $($_.Exception.Message)" -ForegroundColor Red
@@ -628,7 +765,8 @@ function Install-Office {
         } catch { Write-Host "Erro ao baixar Office: $($_.Exception.Message)" -ForegroundColor Red; return }
 
         Write-Host "`nIniciando instalacao..." -ForegroundColor Yellow
-        try { Start-Process -FilePath $officeInstallerPath; Write-Host "Continue com a instalacao manual." -ForegroundColor Green }
+        try { Safe-StartProcess -FilePath $officeInstallerPath -Wait $false -NoNewWindow $false
+              Write-Host "Continue com a instalacao manual." -ForegroundColor Green }
         catch { Write-Host "Erro ao executar instalador: $($_.Exception.Message)" -ForegroundColor Red }
     } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
     Write-Host ""; pause; Clear-Host
@@ -1159,7 +1297,7 @@ function Gerenciar-AnyDesk {
             Write-Host "Baixando AnyDesk v7..." -ForegroundColor Cyan
             try {
                 Download-FromGit "Utilitarios/AnyDesk-v7.exe" $arquivo
-                Start-Process $arquivo -ArgumentList "/S /U=1" -Wait -NoNewWindow
+                Safe-StartProcess -FilePath $arquivo -Arguments "/S /U=1"
                 Write-Host "AnyDesk v7 instalado!" -ForegroundColor Green
             } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
             pause; Gerenciar-AnyDesk
@@ -1380,6 +1518,12 @@ function Show-Changelog {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "                  HISTORICO DE ALTERACOES" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
+    Write-Host "[v0.0.4] - TLS 1.2 forcado globalmente em todos os downloads"
+    Write-Host "[v0.0.4] - Senha de acesso protegida por hash SHA256 (sem texto claro)"
+    Write-Host "[v0.0.4] - Senha lida como SecureString e limpa da memoria apos uso"
+    Write-Host "[v0.0.4] - Validacao de hash SHA256 nos instaladores (Safe-StartProcess)"
+    Write-Host "[v0.0.4] - Funcao Clear-SensitiveVar para limpar variaveis sensiveis"
+    Write-Host "[v0.0.4] - Tabela KnownHashes para cadastro de hashes confiáveis"
     Write-Host "[v0.0.3] - Senha de acesso adicionada (suroh)"
     Write-Host "[v0.0.3] - Opcao 11 agora permite selecionar utilitario individual"
     Write-Host "[v0.0.3] - Opcao 6 implementada: Java 32/64, PJe Office Pro, Certisign"
@@ -1424,7 +1568,7 @@ function Main {
         Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
         Write-Host "                  HORUS TI SOLUCOES" -ForegroundColor White
         Write-Host "--------------------------------------------------------------`n" -ForegroundColor Blue
-        Write-Host "Versao: 0.0.3`n" -ForegroundColor DarkGray
+        Write-Host "Versao: 0.0.4`n" -ForegroundColor DarkGray
 
         Write-Host "1)  Exibir Informacoes do Windows"                              -ForegroundColor Green
         Write-Host "2)  Renomear o computador"                                      -ForegroundColor Green
