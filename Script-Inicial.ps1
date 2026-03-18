@@ -1,19 +1,66 @@
-# Atencao: antes de executar este script, abra o PowerShell como Administrador e execute:
-# Set-ExecutionPolicy Bypass -Scope Process -Force
+# ==============================================================================
+# SETUP-01 - HORUS TI SOLUCOES
+# Versao: 0.0.3
+# Requer: PowerShell como Administrador
+# Antes de executar: Set-ExecutionPolicy Bypass -Scope Process -Force
+# ==============================================================================
 
 Clear-Host
 
-# =========================
+# ==============================================================================
 # CONFIGURACAO CENTRAL
-# =========================
-$GitBaseUrl = "https://raw.githubusercontent.com/josecbuldi-del/scripthti/main"
-
+# Altere apenas esta secao para ajustar caminhos e URLs base
+# ==============================================================================
+$GitBaseUrl   = "https://raw.githubusercontent.com/josecbuldi-del/scripthti/main"
 $BasePath     = "C:\_HTI"
 $ScriptsPath  = Join-Path $BasePath "Scripts"
 $UtilsPath    = Join-Path $BasePath "Utilitarios"
 $ProgramsPath = Join-Path $BasePath "Programas"
 $CleanupPath  = Join-Path $ScriptsPath "Limpeza"
 
+# ==============================================================================
+# SENHA DE ACESSO
+# Altere $ScriptPassword para trocar a senha de acesso ao script
+# ==============================================================================
+$ScriptPassword = "suroh"
+
+function Request-AccessPassword {
+    Clear-Host
+    Write-Host ""
+    Write-Host "  ██╗  ██╗████████╗██╗" -ForegroundColor DarkBlue
+    Write-Host "  ██║  ██║╚══██╔══╝██║" -ForegroundColor DarkBlue
+    Write-Host "  ███████║   ██║   ██║" -ForegroundColor DarkBlue
+    Write-Host "  ██╔══██║   ██║   ██║" -ForegroundColor DarkBlue
+    Write-Host "  ██║  ██║   ██║   ██║" -ForegroundColor DarkBlue
+    Write-Host "  ╚═╝  ╚═╝   ╚═╝   ╚═╝" -ForegroundColor DarkBlue
+    Write-Host ""
+    Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
+    Write-Host "             HORUS TI SOLUCOES" -ForegroundColor White
+    Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
+    Write-Host ""
+
+    $attempts = 0
+    do {
+        $attempts++
+        $inputPassword = Read-Host "Digite a senha de acesso"
+        if ($inputPassword -eq $ScriptPassword) {
+            Write-Host "`nAcesso autorizado!" -ForegroundColor Green
+            Start-Sleep -Seconds 1
+            return $true
+        } else {
+            Write-Host "Senha incorreta. Tente novamente." -ForegroundColor Red
+            if ($attempts -ge 3) {
+                Write-Host "`nNumero maximo de tentativas atingido. Encerrando." -ForegroundColor Red
+                Start-Sleep -Seconds 2
+                exit
+            }
+        }
+    } while ($true)
+}
+
+# ==============================================================================
+# INICIALIZACAO DE ESTRUTURA
+# ==============================================================================
 function Initialize-HTIStructure {
     @($BasePath, $ScriptsPath, $UtilsPath, $ProgramsPath, $CleanupPath) | ForEach-Object {
         if (-not (Test-Path $_)) {
@@ -23,90 +70,60 @@ function Initialize-HTIStructure {
 }
 
 function Get-GitRawUrl {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RelativePath
-    )
+    param([Parameter(Mandatory=$true)][string]$RelativePath)
     return "$GitBaseUrl/$RelativePath"
 }
 
 function Download-FromGit {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$RelativePath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$DestinationPath
+        [Parameter(Mandatory=$true)][string]$RelativePath,
+        [Parameter(Mandatory=$true)][string]$DestinationPath
     )
-
     $url = Get-GitRawUrl -RelativePath $RelativePath
     Invoke-WebRequest -Uri $url -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
 }
 
-# =========================
-# FUNCOES BASICAS
-# =========================
-
+# ==============================================================================
+# FUNCOES UTILITARIAS GERAIS
+# ==============================================================================
 function Check-WingetInstalled {
     $wingetPackage = Get-AppxPackage -AllUsers | Where-Object { $_.Name -like "*Microsoft.DesktopAppInstaller*" }
-
     if ($null -eq $wingetPackage -or -not $wingetPackage.InstallLocation) {
         Write-Host "Winget nao esta instalado ou nao foi encontrado." -ForegroundColor Yellow
         return $false
     }
-
-    $wingetPath = $wingetPackage.InstallLocation
-    $wingetExePath = Join-Path $wingetPath "winget.exe"
-
+    $wingetExePath = Join-Path $wingetPackage.InstallLocation "winget.exe"
     if (Test-Path $wingetExePath) {
-        $env:Path = $env:Path + ";" + $wingetPath
+        $env:Path = $env:Path + ";" + $wingetPackage.InstallLocation
     } else {
-        Write-Host "Winget.exe nao encontrado no caminho esperado: $wingetExePath" -ForegroundColor Red
+        Write-Host "Winget.exe nao encontrado: $wingetExePath" -ForegroundColor Red
         return $false
     }
-
-    try {
-        $null = Get-Command winget -ErrorAction Stop
-        return $true
-    } catch {
-        return $false
-    }
+    try { $null = Get-Command winget -ErrorAction Stop; return $true } catch { return $false }
 }
 
 function Show-LoadingAnimation {
     $animation = @("|", "/", "-", "\")
-    $i = 0
-    $count = 0
+    $i = 0; $count = 0
     while ($count -lt 5) {
         Write-Host -NoNewline "$($animation[$i % $animation.Length])" -ForegroundColor Green
         Start-Sleep -Milliseconds 200
         Write-Host -NoNewline "`r"
-        $i++
-        $count++
+        $i++; $count++
     }
     Write-Host ""
 }
 
-function Accept-WingetTerms {
-    echo Y | winget list > $null
-}
+function Accept-WingetTerms { echo Y | winget list > $null }
 
 function Get-ScoreColor {
     param([double]$Score)
-
-    if ($Score -ge 1 -and $Score -le 3) {
-        return "Red"
-    } elseif ($Score -ge 4 -and $Score -le 5) {
-        return "DarkYellow"
-    } elseif ($Score -ge 5.1 -and $Score -le 6.9) {
-        return "Yellow"
-    } elseif ($Score -ge 7 -and $Score -le 8.9) {
-        return "Green"
-    } elseif ($Score -ge 9) {
-        return "Blue"
-    } else {
-        return "White"
-    }
+    if ($Score -ge 1 -and $Score -le 3)        { return "Red" }
+    elseif ($Score -ge 4 -and $Score -le 5)    { return "DarkYellow" }
+    elseif ($Score -ge 5.1 -and $Score -le 6.9){ return "Yellow" }
+    elseif ($Score -ge 7 -and $Score -le 8.9)  { return "Green" }
+    elseif ($Score -ge 9)                       { return "Blue" }
+    else                                        { return "White" }
 }
 
 function Test-Admin {
@@ -114,19 +131,28 @@ function Test-Admin {
     $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# =========================
-# E-MAIL
-# =========================
+# ==============================================================================
+# LIMPEZA COMPLETA DO HISTORICO DO POWERSHELL
+# ==============================================================================
+function Clear-AllPSHistory {
+    try {
+        $histPath = (Get-PSReadLineOption).HistorySavePath
+        if (Test-Path $histPath) {
+            [System.IO.File]::WriteAllText($histPath, "")
+        }
+    } catch {}
+    Clear-History -ErrorAction SilentlyContinue
+    [Microsoft.PowerShell.PSConsoleReadLine]::ClearHistory()
+}
 
+# ==============================================================================
+# ENVIO DE E-MAIL
+# ==============================================================================
 function Send-Email {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$Subject,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Body
+    param(
+        [Parameter(Mandatory=$true)][string]$Subject,
+        [Parameter(Mandatory=$true)][string]$Body
     )
-
     $smtpServer = "smtp.zoho.com"
     $smtpPort   = 587
     $smtpUser   = "prb2020@zohomail.com"
@@ -138,39 +164,22 @@ function Send-Email {
     $credential = New-Object System.Management.Automation.PSCredential($smtpUser, $securePassword)
 
     try {
-        Send-MailMessage `
-            -SmtpServer $smtpServer `
-            -Port $smtpPort `
-            -UseSsl `
-            -Credential $credential `
-            -From $sender `
-            -To $recipient `
-            -Subject $Subject `
-            -Body $Body
-
+        Send-MailMessage -SmtpServer $smtpServer -Port $smtpPort -UseSsl -Credential $credential `
+            -From $sender -To $recipient -Subject $Subject -Body $Body
         Write-Host "E-mail enviado com sucesso!" -ForegroundColor Green
-        Start-Sleep -Seconds 2
-        Clear-Host
-    }
-    catch {
+        Start-Sleep -Seconds 2; Clear-Host
+    } catch {
         Write-Host "Erro ao enviar o e-mail: $($_.Exception.Message)" -ForegroundColor Red
         Start-Sleep -Seconds 2
     }
 }
 
-# =========================
-# INFORMACOES DO WINDOWS
-# =========================
-
+# ==============================================================================
+# OPCAO 1 - INFORMACOES DO WINDOWS
+# ==============================================================================
 function Info-Windows {
     Clear-Host
-    Write-Host ""
-    Write-Host ""
-    Write-Host ""
-    Write-Host ""
-    Write-Host ""
-    Write-Host ""
-    Write-Host "Aguarde, coletando informacoes do computador..." -ForegroundColor Yellow
+    Write-Host "`n`n`n`n`n`nAguarde, coletando informacoes do computador..." -ForegroundColor Yellow
     Show-LoadingAnimation
 
     $computerInfo = Get-ComputerInfo
@@ -179,728 +188,630 @@ function Info-Windows {
     Write-Output "--------------------------------------------------------------"
     Write-Host "             -------   INFORMACOES DO WINDOWS   -------         " -ForegroundColor Blue
     Write-Output "--------------------------------------------------------------`n"
-
-    Write-Output "Script para o Setup de Windows 10 e 11`n"
     Write-Output "Data de Execucao: $(Get-Date -Format 'dd-MM-yyyy HH:mm:ss')"
     Write-Output "Nome do Computador: $env:COMPUTERNAME"
     Write-Output "Versao do Windows: $($computerInfo.OsName)"
 
     $winVersion = $null
     try {
-        $winVersion = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name DisplayVersion -ErrorAction SilentlyContinue).DisplayVersion
+        $winVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name DisplayVersion -EA SilentlyContinue).DisplayVersion
         if (-not $winVersion) {
-            $winVersion = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ReleaseId -ErrorAction SilentlyContinue).ReleaseId
+            $winVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ReleaseId -EA SilentlyContinue).ReleaseId
         }
-    } catch {
-        $winVersion = "Nao disponivel"
-    }
+    } catch { $winVersion = "Nao disponivel" }
 
     Write-Output "Release: $winVersion"
-    Write-Output "Data Instalacao do Windows: $($computerInfo.OsInstallDate)"
+    Write-Output "Data Instalacao: $($computerInfo.OsInstallDate)"
 
     $psVersion = $PSVersionTable.PSVersion
     Write-Output "Versao do PowerShell: $psVersion"
-
     if ($psVersion.Major -lt 5) {
-        Write-Host "ATENCAO: O PowerShell esta desatualizado! Considere atualizar para a versao mais recente." -ForegroundColor Red
+        Write-Host "ATENCAO: PowerShell desatualizado!" -ForegroundColor Red
     }
 
-    $wingetStatus = Check-WingetInstalled
-    if ($wingetStatus) {
-        Write-Host "Winget: Instalado" -ForegroundColor Green
-    } else {
-        Write-Host "Winget: Nao Instalado" -ForegroundColor Red
-    }
+    if (Check-WingetInstalled) { Write-Host "Winget: Instalado" -ForegroundColor Green }
+    else { Write-Host "Winget: Nao Instalado" -ForegroundColor Red }
 
-    Write-Output "Nome do Dominio (ou Workgroup): $($computerInfo.CsDomain)"
-    Write-Output "Marca do Computador: $($computerInfo.CsManufacturer)"
-    Write-Output "Modelo do Computador: $($computerInfo.CsModel)"
-    Write-Output "Serie do Computador: $($computerInfo.CsSystemFamily)"
-
-    $processorName = (Get-WmiObject Win32_Processor).Name
-    Write-Output "Processador: $processorName"
+    Write-Output "Dominio/Workgroup: $($computerInfo.CsDomain)"
+    Write-Output "Fabricante: $($computerInfo.CsManufacturer)"
+    Write-Output "Modelo: $($computerInfo.CsModel)"
+    Write-Output "Familia: $($computerInfo.CsSystemFamily)"
+    Write-Output "Processador: $((Get-WmiObject Win32_Processor).Name)"
 
     $totalMemoryGB = [math]::Round($computerInfo.OsTotalVisibleMemorySize / 1MB, 2)
-    Write-Output "Total de Memoria (GB): $totalMemoryGB"
+    Write-Output "Memoria (GB): $totalMemoryGB"
 
     $uptime = $computerInfo.OsUptime
-    $uptimeDays = $uptime.Days
     $uptimeFormatted = $uptime.ToString('d\.hh\:mm\:ss')
+    if ($uptime.Days -ge 3)     { Write-Host "Uptime: $uptimeFormatted" -ForegroundColor Red }
+    elseif ($uptime.Days -ge 1) { Write-Host "Uptime: $uptimeFormatted" -ForegroundColor Yellow }
+    else                        { Write-Output "Uptime: $uptimeFormatted" }
 
-    if ($uptimeDays -ge 3) {
-        Write-Host "Tempo de Uptime: $uptimeFormatted" -ForegroundColor Red
-    } elseif ($uptimeDays -ge 1) {
-        Write-Host "Tempo de Uptime: $uptimeFormatted" -ForegroundColor Yellow
-    } else {
-        Write-Output "Tempo de Uptime: $uptimeFormatted"
-    }
-
-    Write-Output "Nome do usuario: $env:USERNAME"
+    Write-Output "Usuario: $env:USERNAME"
 
     try {
-        $localIP = (Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -ErrorAction Stop).IPV4Address.IPAddressToString
-        Write-Output "IP do computador local: $localIP"
-    } catch {
-        $localIP = "Nao foi possivel determinar"
-        Write-Output "IP do computador local: $localIP"
-    }
+        $localIP = (Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -EA Stop).IPV4Address.IPAddressToString
+        Write-Output "IP Local: $localIP"
+    } catch { $localIP = "Nao disponivel"; Write-Output "IP Local: $localIP" }
 
     function Get-PublicIP {
         param([string]$url)
-
         try {
-            if (-not ("System.Net.Http.HttpClient" -as [Type])) {
-                Add-Type -AssemblyName "System.Net.Http"
-            }
-
+            if (-not ("System.Net.Http.HttpClient" -as [Type])) { Add-Type -AssemblyName "System.Net.Http" }
             $client = New-Object System.Net.Http.HttpClient
             $client.Timeout = New-TimeSpan -Seconds 10
-            $responseTask = $client.GetStringAsync($url)
-
-            if ($responseTask.Wait(10000)) {
-                return $responseTask.Result
-            } else {
-                throw "Tempo limite excedido"
-            }
-        } catch {
-            return "Nao foi possivel obter o endereco IP"
-        } finally {
-            if ($client) { $client.Dispose() }
-        }
+            $task = $client.GetStringAsync($url)
+            if ($task.Wait(10000)) { return $task.Result } else { throw "Timeout" }
+        } catch { return "Nao disponivel" }
+        finally { if ($client) { $client.Dispose() } }
     }
 
-    $publicIPv4 = Get-PublicIP -url "https://api.ipify.org?format=text"
-    $publicIPv6 = Get-PublicIP -url "https://api64.ipify.org?format=text"
+    $publicIPv4 = Get-PublicIP "https://api.ipify.org?format=text"
+    $publicIPv6 = Get-PublicIP "https://api64.ipify.org?format=text"
 
-    if ($publicIPv4 -like "*Nao foi possivel obter*" -and $publicIPv6 -like "*Nao foi possivel obter*") {
-        Write-Output "Nao foi possivel obter nenhum endereco IP publico."
-    } elseif ($publicIPv4 -eq $publicIPv6 -or $publicIPv6 -like "*Nao foi possivel obter*") {
-        Write-Output "Endereco IP Publico (IPv4): $publicIPv4"
-        Write-Output "Nao ha endereco IP Publico IPv6 disponivel ou identificado."
+    if ($publicIPv4 -like "*Nao disponivel*" -and $publicIPv6 -like "*Nao disponivel*") {
+        Write-Output "IP Publico: Nao foi possivel obter."
+    } elseif ($publicIPv4 -eq $publicIPv6 -or $publicIPv6 -like "*Nao disponivel*") {
+        Write-Output "IP Publico (IPv4): $publicIPv4"
     } else {
-        Write-Output "Endereco IP Publico (IPv4): $publicIPv4"
-        Write-Output "Endereco IP Publico (IPv6): $publicIPv6"
+        Write-Output "IP Publico (IPv4): $publicIPv4"
+        Write-Output "IP Publico (IPv6): $publicIPv6"
     }
 
     Write-Output "--------------------------------------------------------------"
-    Write-Host "## Informacoes de Desempenho (WinSAT)"
-
+    Write-Host "## Desempenho (WinSAT)"
     try {
-        $winSAT = Get-CimInstance Win32_WinSAT -ErrorAction Stop
-        $scores = @{
-            "Processador" = $winSAT.CPUScore
-            "Graficos 3D" = $winSAT.D3DScore
-            "Disco"       = $winSAT.DiskScore
-            "Graficos"    = $winSAT.GraphicsScore
-            "Memoria"     = $winSAT.MemoryScore
+        $winSAT = Get-CimInstance Win32_WinSAT -EA Stop
+        $scores = @{ "Processador"="$($winSAT.CPUScore)"; "Graficos3D"="$($winSAT.D3DScore)";
+                     "Disco"="$($winSAT.DiskScore)"; "Graficos"="$($winSAT.GraphicsScore)"; "Memoria"="$($winSAT.MemoryScore)" }
+        $minScore=10.0; $maxScore=0.0; $minName=""; $maxName=""
+        Write-Host "`nPontuacoes WinSAT:" -ForegroundColor White
+        foreach ($c in $scores.GetEnumerator()) {
+            $s = [double]$c.Value
+            Write-Host "  $($c.Key): $s" -ForegroundColor (Get-ScoreColor $s)
+            if ($s -lt $minScore) { $minScore=$s; $minName=$c.Key }
+            if ($s -gt $maxScore) { $maxScore=$s; $maxName=$c.Key }
         }
-
-        $minScore = 10.0
-        $maxScore = 0.0
-        $minComponentName = ""
-        $maxComponentName = ""
-
-        Write-Host "`nPontuacoes de Desempenho (WinSAT):" -ForegroundColor White
-        foreach ($component in $scores.GetEnumerator()) {
-            $score = $component.Value
-            $name = $component.Key
-            $color = Get-ScoreColor -Score $score
-            Write-Host "  ${name}: $score" -ForegroundColor $color
-
-            if ($score -lt $minScore) {
-                $minScore = $score
-                $minComponentName = $name
-            }
-            if ($score -gt $maxScore) {
-                $maxScore = $score
-                $maxComponentName = $name
-            }
-        }
-
-        Write-Host ""
-        Write-Host "  Sua menor nota e no componente: $minComponentName (Score: $minScore)" -ForegroundColor Yellow
-        Write-Host "  Sua maior nota e no componente: $maxComponentName (Score: $maxScore)" -ForegroundColor Green
-        Write-Host "  Nivel de Experiencia do Windows (WinSPRLevel): $($winSAT.WinSPRLevel)" -ForegroundColor (Get-ScoreColor -Score $winSAT.WinSPRLevel)
-    } catch {
-        Write-Host "Nao foi possivel obter as pontuacoes do WinSAT." -ForegroundColor Red
-    }
+        Write-Host "  Menor: $minName ($minScore)" -ForegroundColor Yellow
+        Write-Host "  Maior: $maxName ($maxScore)" -ForegroundColor Green
+        Write-Host "  WinSPRLevel: $($winSAT.WinSPRLevel)" -ForegroundColor (Get-ScoreColor $winSAT.WinSPRLevel)
+    } catch { Write-Host "WinSAT nao disponivel." -ForegroundColor Red }
 
     Write-Output "--------------------------------------------------------------`n"
 
-    $tiService = Get-Service -Name "TiService" -ErrorAction SilentlyContinue
-    if ($null -ne $tiService) {
-        if ($tiService.Status -eq "Running") {
-            Write-Host "Agente TiFlux: Instalado e em Execucao" -ForegroundColor Green
-        } else {
-            Write-Host "Agente TiFlux: Instalado e Parado" -ForegroundColor Red
-        }
-    } else {
-        Write-Host "Agente TiFlux: Nao Instalado" -ForegroundColor Red
-    }
+    $tiService = Get-Service -Name "TiService" -EA SilentlyContinue
+    if ($tiService) {
+        if ($tiService.Status -eq "Running") { Write-Host "Agente TiFlux: Instalado e em Execucao" -ForegroundColor Green }
+        else { Write-Host "Agente TiFlux: Instalado e Parado" -ForegroundColor Red }
+    } else { Write-Host "Agente TiFlux: Nao Instalado" -ForegroundColor Red }
 
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Yellow
-    Write-Output "ATENCAO: Este Script funciona apenas na linguagem Portugues/BR"
+    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
     Write-Host "--------------------------------------------------------------" -ForegroundColor Yellow
-    Write-Host ""
 
-    $sendToSupport = Read-Host "Deseja adicionar o endereco do AnyDesk e enviar estas informacoes por e-mail? (S/[N])"
+    $sendToSupport = Read-Host "`nDeseja adicionar AnyDesk e enviar por e-mail? (S/[N])"
     if ($sendToSupport -notmatch "^[Ss](im)?$") {
-        Write-Host "Voltando ao menu principal..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 1
-        Clear-Host
-        return
+        Write-Host "Voltando ao menu..." -ForegroundColor Yellow; Start-Sleep -Seconds 1; Clear-Host; return
     }
 
-    $anydeskAddress = Read-Host "Digite o endereco do AnyDesk"
-    $clientName = Read-Host "Nome do Cliente? (ou pressione Enter para pular)"
-    $additionalNotes = Read-Host "Deseja adicionar alguma observacao? [Enter para nao]"
+    $anydeskAddress   = Read-Host "Endereco do AnyDesk"
+    $clientName       = Read-Host "Nome do Cliente (Enter para pular)"
+    $additionalNotes  = Read-Host "Observacoes (Enter para nao)"
 
     $emailContent = @(
-        "Nome do Computador: $env:COMPUTERNAME",
-        "Endereco IP Local: $localIP",
-        "Endereco IP Publico (IPv4): $publicIPv4",
-        "Endereco IP Publico (IPv6): $publicIPv6",
-        "Endereco do AnyDesk: $anydeskAddress",
-        "",
-        "Data de Execucao: $(Get-Date -Format 'dd-MM-yyyy HH:mm:ss')",
-        "Agente TiFlux: $(if ($null -ne $tiService) { if ($tiService.Status -eq 'Running') { 'Instalado e em Execucao' } else { 'Instalado e Parado' } } else { 'Nao Instalado' })",
-        "Versao do Windows: $($computerInfo.OsName)",
-        "Release: $winVersion",
-        "Data Instalacao do Windows: $($computerInfo.OsInstallDate)",
-        "Nome do Dominio (ou Workgroup): $($computerInfo.CsDomain)",
-        "Marca do Computador: $($computerInfo.CsManufacturer)",
-        "Modelo do Computador: $($computerInfo.CsModel)",
-        "Serie do Computador: $($computerInfo.CsSystemFamily)",
-        "Processador: $processorName",
-        "Total de Memoria (GB): $totalMemoryGB",
-        "Tempo de Uptime: $uptimeFormatted",
-        "Nome do usuario: $env:USERNAME"
+        "Computador: $env:COMPUTERNAME", "IP Local: $localIP",
+        "IP Publico (IPv4): $publicIPv4", "IP Publico (IPv6): $publicIPv6",
+        "AnyDesk: $anydeskAddress", "",
+        "Data: $(Get-Date -Format 'dd-MM-yyyy HH:mm:ss')",
+        "Windows: $($computerInfo.OsName)", "Release: $winVersion",
+        "Fabricante: $($computerInfo.CsManufacturer)", "Modelo: $($computerInfo.CsModel)"
     )
+    if (-not [string]::IsNullOrWhiteSpace($clientName))     { $emailContent += "Cliente: $clientName" }
+    if (-not [string]::IsNullOrWhiteSpace($additionalNotes)) { $emailContent += "Obs: $additionalNotes" }
 
-    if (-not [string]::IsNullOrWhiteSpace($clientName)) {
-        $emailContent += "Nome do Cliente: $clientName"
-    }
-    if (-not [string]::IsNullOrWhiteSpace($additionalNotes)) {
-        $emailContent += "Observacoes: $additionalNotes"
-    }
-
-    $subject = "Informacoes do Windows - $env:COMPUTERNAME"
-    if (-not [string]::IsNullOrWhiteSpace($clientName)) {
-        $subject += " - $clientName"
-    }
-
+    $subject = "Info Windows - $env:COMPUTERNAME"
+    if (-not [string]::IsNullOrWhiteSpace($clientName)) { $subject += " - $clientName" }
     Send-Email -Subject $subject -Body ($emailContent -join "`n")
 
-    Write-Host "As informacoes foram enviadas para o suporte." -ForegroundColor Green
-    Start-Sleep -Seconds 2
-    Clear-Host
+    Write-Host "Informacoes enviadas." -ForegroundColor Green
+    Start-Sleep -Seconds 2; Clear-Host
 }
 
-# =========================
-# COMPUTADOR / AGENTE
-# =========================
-
+# ==============================================================================
+# OPCAO 2 - RENOMEAR COMPUTADOR
+# ==============================================================================
 function Rename-ComputerCustom {
-    Write-Host "Nome atual do computador: $env:COMPUTERNAME"
-
+    Write-Host "Nome atual: $env:COMPUTERNAME"
     do {
-        $novoNome = Read-Host "Digite o novo nome para o computador (ou pressione Enter para cancelar)"
-
+        $novoNome = Read-Host "Novo nome (Enter para cancelar)"
         if ([string]::IsNullOrWhiteSpace($novoNome)) {
-            Write-Host "Operacao cancelada."
-            Start-Sleep -Seconds 1
-            Clear-Host
-            return
+            Write-Host "Cancelado."; Start-Sleep -Seconds 1; Clear-Host; return
         }
-
         if ($novoNome -match "^[a-zA-Z0-9\.\-_]+$") {
             try {
                 Rename-Computer -NewName $novoNome -Force
-                Write-Host "Computador renomeado para '$novoNome'. Reinicie para aplicar as mudancas." -ForegroundColor Yellow
-                return
-            } catch {
-                Write-Host "Erro ao renomear o computador: $($_.Exception.Message)" -ForegroundColor Red
-                pause
-            }
-        } else {
-            Write-Host "Nome invalido! Use apenas letras, numeros, '-', '.' e '_'." -ForegroundColor Red
-        }
+                Write-Host "Renomeado para '$novoNome'. Reinicie para aplicar." -ForegroundColor Yellow; return
+            } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red; pause }
+        } else { Write-Host "Nome invalido. Use letras, numeros, '-', '.' e '_'." -ForegroundColor Red }
     } while ($true)
 }
 
+# ==============================================================================
+# OPCAO 3 - INSTALACAO DO AGENTE TIFLUX
+# ==============================================================================
 function Get-ClientLinksFromCSV {
     $csvFilePath = Join-Path $ScriptsPath "clientes.csv"
-
     if (-not (Test-Path $csvFilePath)) {
-        Write-Host "Baixando o arquivo dos links dos clientes..." -ForegroundColor Yellow
+        Write-Host "Baixando clientes.csv..." -ForegroundColor Yellow
         try {
-            Download-FromGit -RelativePath "Scripts/clientes.csv" -DestinationPath $csvFilePath
-            Write-Host "Arquivo baixado com sucesso!" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "Erro ao baixar o arquivo CSV: $($_.Exception.Message)" -ForegroundColor Red
-            return $null
+            Download-FromGit "Scripts/clientes.csv" $csvFilePath
+            Write-Host "Baixado com sucesso!" -ForegroundColor Green
+        } catch {
+            Write-Host "Erro ao baixar CSV: $($_.Exception.Message)" -ForegroundColor Red; return $null
         }
     }
-
-    try {
-        return Import-Csv -Path $csvFilePath
-    }
-    catch {
-        Write-Host "Erro ao ler o clientes.csv: $($_.Exception.Message)" -ForegroundColor Red
-        return $null
-    }
+    try { return Import-Csv -Path $csvFilePath }
+    catch { Write-Host "Erro ao ler CSV: $($_.Exception.Message)" -ForegroundColor Red; return $null }
 }
 
 function Download-And-InstallAgent {
-    param (
-        [string]$clientName,
-        [string]$downloadLink
-    )
-
-    $fileName = "C:\_HTI\$clientName.msi"
-
-    Write-Host "Baixando o agente para $clientName..."
+    param([string]$clientName, [string]$downloadLink)
+    $fileName = Join-Path $BasePath "$clientName.msi"
+    Write-Host "Baixando agente para $clientName..."
     try {
         Invoke-WebRequest -Uri $downloadLink -OutFile $fileName
-        Write-Host "Agente baixado com sucesso!" -ForegroundColor Green
-    } catch {
-        Write-Host "Erro ao baixar o agente. Verifique o link de download." -ForegroundColor Red
-        return
-    }
-
-    Write-Host "Instalando o agente de $clientName..."
+        Write-Host "Baixado!" -ForegroundColor Green
+    } catch { Write-Host "Erro ao baixar: $($_.Exception.Message)" -ForegroundColor Red; return }
+    Write-Host "Instalando..."
     Start-Process msiexec.exe -ArgumentList "/i", $fileName, "/quiet", "/norestart" -NoNewWindow -Wait
     Write-Host "Instalacao concluida para $clientName."
-    pause
-    Clear-Host
+    pause; Clear-Host
 }
 
 function Install-Agente {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "Instalar Agente" -ForegroundColor Green
+    Write-Host "Instalar Agente TiFlux" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
 
-    $service = Get-Service -Name "TiService" -ErrorAction SilentlyContinue
-    if ($service -ne $null -and $service.Status -eq "Running") {
-        Write-Host "`nO agente TiFlux ja esta instalado no computador." -ForegroundColor Yellow
-        $removeConfirmation = Read-Host "Deseja remover o agente antes de prosseguir? (S/N)"
+    $service = Get-Service -Name "TiService" -EA SilentlyContinue
+    if ($service -and $service.Status -eq "Running") {
+        Write-Host "`nAgente TiFlux ja instalado." -ForegroundColor Yellow
+        $removeConfirmation = Read-Host "Deseja remover antes de prosseguir? (S/N)"
         if ($removeConfirmation -match "S") {
-            $programsToRemove = @("Ti Service And Agent", "TiPeerToPeer", "timessenger")
-
-            foreach ($program in $programsToRemove) {
-                try {
-                    Write-Host "`nRemovendo $program..." -ForegroundColor Cyan
-                    winget uninstall --name $program -e
-                } catch {
-                    Write-Host "Erro ao tentar remover $program. Pode ser que ele nao esteja instalado." -ForegroundColor Yellow
-                }
+            foreach ($p in @("Ti Service And Agent","TiPeerToPeer","timessenger")) {
+                try { Write-Host "Removendo $p..." -ForegroundColor Cyan; winget uninstall --name $p -e }
+                catch { Write-Host "Nao encontrado: $p" -ForegroundColor Yellow }
             }
-
-            $installConfirmation = Read-Host "Deseja continuar com a instalacao do Agente? (S/N)"
+            $installConfirmation = Read-Host "Continuar com a instalacao? (S/N)"
             if ($installConfirmation -notmatch "S") {
-                Write-Host "Instalacao cancelada." -ForegroundColor Yellow
-                Start-Sleep -Seconds 2
-                Clear-Host
-                return
+                Write-Host "Cancelado." -ForegroundColor Yellow; Start-Sleep -Seconds 2; Clear-Host; return
             }
-        } else {
-            Write-Host "Instalacao cancelada pelo usuario." -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-            Clear-Host
-            return
-        }
+        } else { Write-Host "Cancelado." -ForegroundColor Yellow; Start-Sleep -Seconds 2; Clear-Host; return }
     }
 
     $csvPath = Join-Path $ScriptsPath "clientes.csv"
     if (-not (Test-Path $csvPath)) {
-        Write-Host "Baixando arquivo clientes.csv..." -ForegroundColor Yellow
-        try {
-            Download-FromGit -RelativePath "Scripts/clientes.csv" -DestinationPath $csvPath
-            Write-Host "Arquivo clientes.csv baixado com sucesso!" -ForegroundColor Green
-        } catch {
-            Write-Host "Erro ao baixar o arquivo clientes.csv: $($_.Exception.Message)" -ForegroundColor Red
-            Clear-Host
-            return
-        }
+        Write-Host "Baixando clientes.csv..." -ForegroundColor Yellow
+        try { Download-FromGit "Scripts/clientes.csv" $csvPath; Write-Host "OK!" -ForegroundColor Green }
+        catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red; Clear-Host; return }
     }
 
     $clients = Get-ClientLinksFromCSV
-    if ($clients -eq $null) {
-        Write-Host "Erro ao carregar os dados dos clientes." -ForegroundColor Red
-        Clear-Host
-        return
-    }
+    if (-not $clients) { Write-Host "Erro ao carregar clientes." -ForegroundColor Red; Clear-Host; return }
 
     while ($true) {
-        $nomeCliente = Read-Host "`nDigite o nome (ou parte do nome) do cliente que deseja instalar o agente (ou '0' para sair)"
-
+        $nomeCliente = Read-Host "`nNome do cliente (ou '0' para sair)"
         if ($nomeCliente -eq "0") {
-            Write-Host "Saindo para o menu principal..." -ForegroundColor Cyan
-            Remove-Item -Path $csvPath -Force -ErrorAction SilentlyContinue
-            Write-Host "Arquivo clientes.csv excluido." -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-            Clear-Host
-            return
+            Remove-Item $csvPath -Force -EA SilentlyContinue
+            Write-Host "CSV removido." -ForegroundColor Yellow; Start-Sleep -Seconds 2; Clear-Host; return
         }
 
         $resultados = $clients | Where-Object { $_.Cliente -like "*$nomeCliente*" }
-
         if ($resultados.Count -eq 0) {
-            Write-Host "Nenhum cliente encontrado com esse nome." -ForegroundColor Red
-            $listarTodos = Read-Host "Deseja listar todos os clientes? (S/N)"
+            Write-Host "Nenhum cliente encontrado." -ForegroundColor Red
+            $listarTodos = Read-Host "Listar todos? (S/N)"
             if ($listarTodos -match "S") {
-                Write-Host "`nLista de clientes:" -ForegroundColor Green
                 $clients | ForEach-Object { Write-Host "$($_.Cliente) - Indice: $([array]::IndexOf($clients, $_) + 1)" }
             }
         } else {
             Write-Host "`nClientes encontrados:" -ForegroundColor Cyan
-            $resultados | ForEach-Object {
-                $index = [array]::IndexOf($clients, $_) + 1
-                Write-Host "$($_.Cliente) - Indice: $index"
-            }
-
-            $input = Read-Host "`nDigite o numero do cliente (indice) para instalar ou '0' para cancelar"
-            if ($input -eq "0") {
-                Write-Host "Instalacao cancelada." -ForegroundColor Yellow
-                pause
-                Clear-Host
-                return
-            }
-
+            $resultados | ForEach-Object { Write-Host "$($_.Cliente) - Indice: $([array]::IndexOf($clients, $_) + 1)" }
+            $input = Read-Host "`nNumero do cliente (ou '0' para cancelar)"
+            if ($input -eq "0") { pause; Clear-Host; return }
             $clientIndex = 0
-            if ([int]::TryParse($input, [ref]$clientIndex) -and $clientIndex -ge 1 -and $clientIndex -le $clients.Count) {
-                $selectedClient = $clients[$clientIndex - 1]
-                Write-Host "`nVoce selecionou o cliente: $($selectedClient.Cliente)" -ForegroundColor Green
-                $confirmation = Read-Host "Confirma? (S/N)"
-                if ($confirmation -match "S") {
-                    Download-And-InstallAgent -clientName $selectedClient.Cliente -downloadLink $selectedClient.'Link-Agente'
-                    return
-                } else {
-                    Write-Host "Instalacao cancelada. Voltando a selecao..." -ForegroundColor Yellow
-                    Start-Sleep -Seconds 2
-                }
-            } else {
-                Write-Host "Indice invalido. Tente novamente." -ForegroundColor Red
-            }
+            if ([int]::TryParse($input,[ref]$clientIndex) -and $clientIndex -ge 1 -and $clientIndex -le $clients.Count) {
+                $sel = $clients[$clientIndex - 1]
+                Write-Host "`nSelecionado: $($sel.Cliente)" -ForegroundColor Green
+                if ((Read-Host "Confirmar? (S/N)") -match "S") {
+                    Download-And-InstallAgent $sel.Cliente $sel.'Link-Agente'; return
+                } else { Write-Host "Cancelado." -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
+            } else { Write-Host "Indice invalido." -ForegroundColor Red }
         }
     }
 }
 
-# =========================
-# INSTALACAO DE PROGRAMAS
-# =========================
-
+# ==============================================================================
+# OPCAO 5 - PACOTE BASICO DE PROGRAMAS
+# ==============================================================================
 function Install-BasicPackage {
     if (-not (Check-WingetInstalled)) {
-        Write-Host "`nO Winget nao esta instalado neste computador. Por favor, instale-o antes de prosseguir." -ForegroundColor Red
-        pause
-        Clear-Host
-        return
+        Write-Host "`nWinget nao instalado." -ForegroundColor Red; pause; Clear-Host; return
     }
-
     Accept-WingetTerms
 
     $packages = @(
-        @{ Name = "7-Zip"; Command = "winget install --id=7zip.7zip -e" },
-        @{ Name = "Google Chrome"; Command = "winget install --id=Google.Chrome -e" },
-        @{ Name = "AnyDesk"; Command = "winget install --id=AnyDeskSoftwareGmbH.AnyDesk -e" },
-        @{ Name = "Lightshot"; Command = "winget install --id=Skillbrains.Lightshot -e" },
-        @{ Name = "Adobe Acrobat Reader (64-bit)"; Command = "winget install --id=Adobe.Acrobat.Reader.64-bit -e" }
+        @{ Name = "7-Zip";                     Command = "winget install --id=7zip.7zip -e" },
+        @{ Name = "Google Chrome";             Command = "winget install --id=Google.Chrome -e" },
+        @{ Name = "AnyDesk";                   Command = "winget install --id=AnyDeskSoftwareGmbH.AnyDesk -e" },
+        @{ Name = "Lightshot";                 Command = "winget install --id=Skillbrains.Lightshot -e" },
+        @{ Name = "Adobe Acrobat Reader 64bit";Command = "winget install --id=Adobe.Acrobat.Reader.64-bit -e" }
     )
 
-    Write-Host "`nOs seguintes programas serao instalados e/ou atualizados:" -ForegroundColor Cyan
-    foreach ($package in $packages) {
-        Write-Host "- $($package.Name)" -ForegroundColor Yellow
-    }
+    Write-Host "`nProgramas disponiveis para instalar/atualizar:" -ForegroundColor Cyan
+    foreach ($p in $packages) { Write-Host "- $($p.Name)" -ForegroundColor Yellow }
 
-    $confirm = Read-Host "`nTem certeza de que deseja iniciar a instalacao e atualizacao dos programas? (S/N)"
-    if ($confirm -ne "S") {
-        Write-Host "Operacao cancelada pelo usuario." -ForegroundColor Red
-        Start-Sleep -Seconds 2
-        Clear-Host
-        return
-    }
+    $confirm = Read-Host "`nConfirmar instalacao/atualizacao? (S/N)"
+    if ($confirm -ne "S") { Write-Host "Cancelado." -ForegroundColor Red; Start-Sleep -Seconds 2; Clear-Host; return }
 
     foreach ($package in $packages) {
-        $name = $package.Name
-        $command = $package.Command
-
-        $installed = Get-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-                     Where-Object { $_.DisplayName -like "*$name*" }
+        $name = $package.Name; $command = $package.Command
+        $installed = Get-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -EA SilentlyContinue |
+            Where-Object { $_.DisplayName -like "*$name*" }
 
         if ($installed) {
-            Write-Host "`n$name ja esta instalado." -ForegroundColor Yellow
-            $choice = Read-Host "Deseja atualizar $name? (Padrao: N, pressione Enter para Nao, ou digite 'S' para Sim)"
-            if ($choice -eq "S") {
-                Write-Host "Atualizando $name..." -ForegroundColor Green
+            Write-Host "`n$name ja instalado." -ForegroundColor Yellow
+            if ((Read-Host "Atualizar $name? (S/N)") -eq "S") {
                 Start-Process -NoNewWindow -Wait -FilePath "cmd.exe" -ArgumentList "/c $command --silent --force"
-                Write-Host "$name foi atualizado com sucesso." -ForegroundColor Green
-            } else {
-                Write-Host "Atualizacao de $name foi cancelada." -ForegroundColor Red
-            }
+                Write-Host "$name atualizado." -ForegroundColor Green
+            } else { Write-Host "Atualizacao de $name cancelada." -ForegroundColor Red }
         } else {
-            Write-Host "`n$name nao esta instalado. Instalando agora..." -ForegroundColor Yellow
+            Write-Host "`nInstalando $name..." -ForegroundColor Yellow
             Start-Process -NoNewWindow -Wait -FilePath "cmd.exe" -ArgumentList "/c $command --silent"
-            Write-Host "$name foi instalado com sucesso." -ForegroundColor Green
+            Write-Host "$name instalado." -ForegroundColor Green
         }
     }
 
-    Write-Host "`nOperacao concluida. Pressione qualquer tecla para voltar ao menu principal..." -ForegroundColor Cyan
-    [void][System.Console]::ReadKey($true)
-    Clear-Host
+    Write-Host "`nConcluido." -ForegroundColor Cyan
+    [void][System.Console]::ReadKey($true); Clear-Host
 }
 
-function Download-Utilities {
+# ==============================================================================
+# OPCAO 6 - PACOTE JURIDICO (Java, PJe Office, Certisign)
+# PARA ADICIONAR NOVOS SOFTWARES: adicione um bloco no switch abaixo
+# ==============================================================================
+function Install-LegalPackage {
     Clear-Host
-    Write-Host "`n--------------------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host "         Download de Aplicativos Utilitarios de Suporte" -ForegroundColor Gray
-    Write-Host "--------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
+    Write-Host "      Pacote de Programas Juridicos" -ForegroundColor Green
+    Write-Host "--------------------------------------------------------------`n" -ForegroundColor Green
 
-    $confirmDownload = Read-Host "`nTem certeza que deseja baixar os aplicativos utilitarios? (S/N)"
-    if ($confirmDownload -notmatch "^(Sim|sim|S|s)$") {
-        Write-Host "`nOperacao cancelada. Retornando ao menu principal ..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 2
-        Clear-Host
-        Main
-        return
-    }
+    Write-Host "Selecione o que deseja instalar:`n"
+    Write-Host "A) Java 32 bits (JRE - necessario para PJe/sistemas juridicos)" -ForegroundColor Green
+    Write-Host "B) Java 64 bits (JRE - necessario para PJe/sistemas juridicos)" -ForegroundColor Green
+    Write-Host "C) PJe Office Pro (cliente do processo judicial eletronico)"    -ForegroundColor Green
+    Write-Host "D) Driver Certificado Digital Certisign (abre site de download)" -ForegroundColor Green
 
-    $fileListPath = Join-Path $UtilsPath "files.txt"
+    # ------------------------------------------------------------------
+    # PARA ADICIONAR NOVO SOFTWARE JURIDICO:
+    # 1) Adicione uma linha Write-Host com a letra e descricao
+    # 2) Adicione o case correspondente no switch abaixo
+    # ------------------------------------------------------------------
 
-    Write-Host "Baixando a lista de arquivos..."
-    try {
-        Download-FromGit -RelativePath "Scripts/files.txt" -DestinationPath $fileListPath
-    } catch {
-        Write-Host "Erro ao baixar files.txt: $($_.Exception.Message)" -ForegroundColor Red
-        pause
-        Clear-Host
-        return
-    }
+    Write-Host ""
+    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
+    Write-Host ""
 
-    $files = Get-Content $fileListPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $choice = Read-Host "Digite a letra da opcao desejada"
 
-    foreach ($fileName in $files) {
-        $cleanName = $fileName.Trim()
-        $outputPath = Join-Path -Path $UtilsPath -ChildPath $cleanName
+    switch ($choice.ToUpper()) {
 
-        Write-Host "Baixando: $cleanName..."
-        try {
-            Download-FromGit -RelativePath "Utilitarios/$cleanName" -DestinationPath $outputPath
-            Write-Host "$cleanName baixado com sucesso." -ForegroundColor Green
-        } catch {
-            Write-Host "Falha ao baixar $cleanName : $($_.Exception.Message)" -ForegroundColor Red
+        # ------------------------------------------------------------------
+        # CASE A - Java 32 bits
+        # ------------------------------------------------------------------
+        "A" {
+            Write-Host "`nBaixando e instalando Java 32 bits (JRE)..." -ForegroundColor Cyan
+            try {
+                $javaPath = Join-Path $ProgramsPath "java32.exe"
+                $javaUrl  = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=249552_4d245f941845490c91360409ecffb3b4"
+                Write-Host "Baixando..." -ForegroundColor Yellow
+                Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
+                Write-Host "Instalando (silencioso)..." -ForegroundColor Yellow
+                Start-Process -FilePath $javaPath -ArgumentList "/s" -Wait -NoNewWindow
+                Write-Host "Java 32 bits instalado com sucesso!" -ForegroundColor Green
+            } catch {
+                Write-Host "Erro ao instalar Java 32 bits: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Tente manualmente em: https://www.java.com/pt-BR/download/" -ForegroundColor Yellow
+            }
+            pause; Install-LegalPackage
+        }
+
+        # ------------------------------------------------------------------
+        # CASE B - Java 64 bits
+        # ------------------------------------------------------------------
+        "B" {
+            Write-Host "`nBaixando e instalando Java 64 bits (JRE)..." -ForegroundColor Cyan
+            try {
+                $javaPath = Join-Path $ProgramsPath "java64.exe"
+                $javaUrl  = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=249554_4d245f941845490c91360409ecffb3b4"
+                Write-Host "Baixando..." -ForegroundColor Yellow
+                Invoke-WebRequest -Uri $javaUrl -OutFile $javaPath -UseBasicParsing -EA Stop
+                Write-Host "Instalando (silencioso)..." -ForegroundColor Yellow
+                Start-Process -FilePath $javaPath -ArgumentList "/s" -Wait -NoNewWindow
+                Write-Host "Java 64 bits instalado com sucesso!" -ForegroundColor Green
+            } catch {
+                Write-Host "Erro ao instalar Java 64 bits: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Tente manualmente em: https://www.java.com/pt-BR/download/" -ForegroundColor Yellow
+            }
+            pause; Install-LegalPackage
+        }
+
+        # ------------------------------------------------------------------
+        # CASE C - PJe Office Pro
+        # ------------------------------------------------------------------
+        "C" {
+            Write-Host "`nBaixando e instalando PJe Office Pro..." -ForegroundColor Cyan
+            try {
+                $pjePath = Join-Path $ProgramsPath "PjeOffice.exe"
+                $pjeUrl  = "https://www.pje.jus.br/wiki/images/PjeOffice-win64.exe"
+                Write-Host "Baixando..." -ForegroundColor Yellow
+                Invoke-WebRequest -Uri $pjeUrl -OutFile $pjePath -UseBasicParsing -EA Stop
+                Write-Host "Iniciando instalacao..." -ForegroundColor Yellow
+                Start-Process -FilePath $pjePath -Wait
+                Write-Host "PJe Office Pro instalado com sucesso!" -ForegroundColor Green
+            } catch {
+                Write-Host "Erro ao baixar PJe Office: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Baixe manualmente em: https://www.pje.jus.br/wiki/index.php/PjeOffice" -ForegroundColor Yellow
+            }
+            pause; Install-LegalPackage
+        }
+
+        # ------------------------------------------------------------------
+        # CASE D - Driver Certisign (abre site e pasta de downloads)
+        # ------------------------------------------------------------------
+        "D" {
+            Write-Host "`nAbrindo site de suporte e downloads da Certisign..." -ForegroundColor Cyan
+            try {
+                Start-Process "https://certisign.com.br/suporte/download"
+                Write-Host "Site aberto no navegador padrao." -ForegroundColor Green
+                Write-Host "Faca o download do driver diretamente pela pagina." -ForegroundColor Yellow
+            } catch {
+                Write-Host "Nao foi possivel abrir o navegador: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Acesse manualmente: https://certisign.com.br/suporte/download" -ForegroundColor Yellow
+            }
+            pause; Install-LegalPackage
+        }
+
+        # ------------------------------------------------------------------
+        # CASE 0 - Voltar
+        # ------------------------------------------------------------------
+        "0" { Clear-Host; return }
+
+        default {
+            Write-Host "Opcao invalida." -ForegroundColor Red
+            Start-Sleep -Seconds 2; Install-LegalPackage
         }
     }
-
-    Write-Host "`nTodos os downloads foram processados.`n" -ForegroundColor Green
-    Write-Host "Arquivos disponiveis em C:\_HTI\Utilitarios`n" -ForegroundColor Green
-    pause
-    Clear-Host
 }
 
+# ==============================================================================
+# OPCAO 8 - INSTALACAO DO OFFICE
+# ==============================================================================
 function Install-Office {
     try {
-        Write-Host "`nDeseja instalar o Office neste computador? [S/n]" -ForegroundColor Yellow
-        $confirm = Read-Host "(Pressione Enter para SIM)"
+        Write-Host "`nDeseja instalar o Office? [S/n]" -ForegroundColor Yellow
+        $confirm = Read-Host "(Enter = SIM)"
         if ($confirm -and $confirm -notmatch "^[Ss]$") {
-            Write-Host "`nOperacao cancelada pelo usuario. Retornando ao menu principal..." -ForegroundColor Red
-            Start-Sleep -Seconds 2
-            Clear-Host
-            return
+            Write-Host "Cancelado." -ForegroundColor Red; Start-Sleep -Seconds 2; Clear-Host; return
         }
-
         try {
             $officeProcesses = Get-Process | Where-Object { $_.Name -like "*office*" }
             if ($officeProcesses) {
-                Write-Host "`nOs seguintes processos relacionados ao Office foram encontrados:" -ForegroundColor Yellow
+                Write-Host "`nProcessos Office em execucao:" -ForegroundColor Yellow
                 $officeProcesses | ForEach-Object { Write-Host "- $($_.Name)" -ForegroundColor Cyan }
-
-                Write-Host "`nDeseja forcar o encerramento desses processos? [S/n]" -ForegroundColor Red
-                $forceClose = Read-Host "(Pressione Enter para SIM)"
-                if ($forceClose -and $forceClose -notmatch "^[Ss]$") {
-                    Write-Host "`nOperacao cancelada pelo usuario. Retornando ao menu principal..." -ForegroundColor Red
-                    Start-Sleep -Seconds 2
-                    return
+                if ((Read-Host "Forcar encerramento? [S/n] (Enter=SIM)") -notmatch "^[Ss]$") {
+                    Write-Host "Cancelado." -ForegroundColor Red; Start-Sleep -Seconds 2; return
                 }
-
                 $officeProcesses | ForEach-Object {
-                    try {
-                        Stop-Process -Id $_.Id -Force
-                        Write-Host "Processo '$($_.Name)' encerrado com sucesso." -ForegroundColor Green
-                    } catch {
-                        Write-Host "Erro ao encerrar o processo '$($_.Name)': $($_.Exception.Message)" -ForegroundColor Red
-                    }
+                    try { Stop-Process -Id $_.Id -Force; Write-Host "'$($_.Name)' encerrado." -ForegroundColor Green }
+                    catch { Write-Host "Erro ao encerrar '$($_.Name)'." -ForegroundColor Red }
                 }
             }
-        } catch {
-            Write-Host "Erro ao verificar ou encerrar processos relacionados ao Office: $($_.Exception.Message)" -ForegroundColor Red
-        }
+        } catch { Write-Host "Erro ao verificar processos: $($_.Exception.Message)" -ForegroundColor Red }
 
         $officeInstallerPath = Join-Path $ProgramsPath "OfficeSetup.exe"
-
-        Write-Host "`nBaixando o instalador do Office..." -ForegroundColor Cyan
+        Write-Host "`nBaixando instalador do Office..." -ForegroundColor Cyan
         try {
-            Download-FromGit -RelativePath "Programas/OfficeSetup.exe" -DestinationPath $officeInstallerPath
-            Write-Host "Instalador do Office baixado com sucesso para '$officeInstallerPath'." -ForegroundColor Green
-        } catch {
-            Write-Host "Erro ao baixar o instalador do Office: $($_.Exception.Message)" -ForegroundColor Red
-            return
-        }
+            Download-FromGit "Programas/OfficeSetup.exe" $officeInstallerPath
+            Write-Host "Baixado em '$officeInstallerPath'." -ForegroundColor Green
+        } catch { Write-Host "Erro ao baixar Office: $($_.Exception.Message)" -ForegroundColor Red; return }
 
-        Write-Host "`nIniciando a instalacao do Office..." -ForegroundColor Yellow
-        try {
-            Start-Process -FilePath $officeInstallerPath
-            Write-Host "Continue com a instalacao manual do Office" -ForegroundColor Green
-        } catch {
-            Write-Host "Erro ao executar o instalador do Office: $($_.Exception.Message)" -ForegroundColor Red
-        }
-    } catch {
-        Write-Host "Ocorreu um erro durante a instalacao do Office: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    Write-Host ""
-    pause
-    Clear-Host
+        Write-Host "`nIniciando instalacao..." -ForegroundColor Yellow
+        try { Start-Process -FilePath $officeInstallerPath; Write-Host "Continue com a instalacao manual." -ForegroundColor Green }
+        catch { Write-Host "Erro ao executar instalador: $($_.Exception.Message)" -ForegroundColor Red }
+    } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
+    Write-Host ""; pause; Clear-Host
 }
 
-# =========================
-# ATIVACAO WINDOWS / OFFICE  <-- ALTERADO
-# =========================
-
+# ==============================================================================
+# OPCAO 9 - ATIVACAO DO WINDOWS E OFFICE
+# ==============================================================================
 function Activate-WindowsOffice {
     try {
         Clear-Host
         Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
         Write-Host "         Ativacao do Windows e Office" -ForegroundColor Cyan
         Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
-        Write-Host "Esta opcao executa a ferramenta de ativacao Microsoft Activation Scripts." -ForegroundColor Yellow
+        Write-Host "Esta opcao executa a ferramenta Microsoft Activation Scripts." -ForegroundColor Yellow
         Write-Host "Fonte: https://get.activated.win`n" -ForegroundColor DarkGray
 
-        $confirm = Read-Host "Deseja iniciar o processo de ativacao? [S/n] (Pressione Enter para SIM)"
+        $confirm = Read-Host "Iniciar ativacao? [S/n] (Enter=SIM)"
         if ($confirm -and $confirm -notmatch "^[Ss]$") {
-            Write-Host "`nOperacao cancelada pelo usuario. Retornando ao menu principal..." -ForegroundColor Red
-            Start-Sleep -Seconds 2
-            Clear-Host
-            return
+            Write-Host "Cancelado." -ForegroundColor Red; Start-Sleep -Seconds 2; Clear-Host; return
         }
 
-        Write-Host "`nIniciando o processo de ativacao..." -ForegroundColor Cyan
+        Write-Host "`nIniciando..." -ForegroundColor Cyan
         irm https://get.activated.win | iex
 
-        Write-Host "`nFinalize a ativacao conforme as instrucoes apresentadas na tela." -ForegroundColor Yellow
-        Write-Host "`nPressione qualquer tecla para retornar ao menu principal..." -ForegroundColor Cyan
+        Write-Host "`nFinalize conforme as instrucoes na tela." -ForegroundColor Yellow
+        Write-Host "Pressione qualquer tecla para voltar ao menu..." -ForegroundColor Cyan
         $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     } catch {
-        Write-Host "Ocorreu um erro durante o processo de ativacao: $($_.Exception.Message)" -ForegroundColor Red
-        pause
+        Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red; pause
     }
     Clear-Host
 }
 
+# ==============================================================================
+# OPCAO 10 - REMOVER APPS DESNECESSARIOS
+# ==============================================================================
 function Remove-Apps {
     if (-not (Check-WingetInstalled)) {
-        Write-Host "`nO Winget nao esta instalado neste computador. Por favor, instale-o antes de prosseguir." -ForegroundColor Red
-        pause
-        Clear-Host
-        return
+        Write-Host "Winget nao instalado." -ForegroundColor Red; pause; Clear-Host; return
     }
-
     Accept-WingetTerms
 
+    # Para adicionar apps: inclua o nome exato na lista abaixo
     $appsToRemove = @(
-        "Tactical RMM Agent",
-        "Agente Milvus",
-        "Mesh Agent",
-        "Solitaire",
-        "Jogo de Copas",
-        "Spades",
-        "Solitaire & Casual Games",
-        "Game Bar",
-        "Game Speech Window",
-        "Noticias",
-        "Xbox",
-        "Xbox TCUI",
-        "Xbox Game Bar Plugin",
-        "Xbox Console Companion",
-        "Xbox Game Speech Window",
-        "Xbox Identity Provider",
-        "WebAdvisor da McAfee",
-        "Dropbox - promocao",
-        "Noticias",
-        "Microsoft Bing"
+        "Tactical RMM Agent","Agente Milvus","Mesh Agent","Solitaire","Jogo de Copas",
+        "Spades","Solitaire & Casual Games","Game Bar","Game Speech Window","Noticias",
+        "Xbox","Xbox TCUI","Xbox Game Bar Plugin","Xbox Console Companion",
+        "Xbox Game Speech Window","Xbox Identity Provider","WebAdvisor da McAfee",
+        "Dropbox - promocao","Microsoft Bing"
     )
 
     $wingetOutput = winget list | ForEach-Object {
         $fields = $_ -split '\s{2,}'
-        [PSCustomObject]@{
-            Name = $fields[0]
-            Id = if ($fields.Count -gt 1) { $fields[1] } else { "" }
-        }
+        [PSCustomObject]@{ Name = $fields[0]; Id = if ($fields.Count -gt 1) { $fields[1] } else { "" } }
     }
 
     $installedApps = $wingetOutput | Where-Object {
-        $appsToRemove -contains $_.Name -or ($appsToRemove | ForEach-Object { $_.ToLower() }) -contains $_.Name.ToLower()
+        $name = $_.Name
+        $appsToRemove | Where-Object { $_ -eq $name -or $_.ToLower() -eq $name.ToLower() }
     }
 
     if ($installedApps.Count -eq 0) {
-        Write-Host "`nNenhum dos aplicativos especificados esta instalado no sistema.`n" -ForegroundColor Yellow
-        pause
-        Clear-Host
-        return
+        Write-Host "`nNenhum app para remover encontrado." -ForegroundColor Yellow; pause; Clear-Host; return
     }
 
-    Write-Host "`nOs seguintes aplicativos serao removidos:`n" -ForegroundColor Cyan
+    Write-Host "`nApps a serem removidos:`n" -ForegroundColor Cyan
     $installedApps | ForEach-Object { Write-Host $_.Name }
 
-    $confirmation = Read-Host "Pressione [Enter] para continuar ou digite 'N' para cancelar"
-    if ($confirmation -eq 'N') {
-        Write-Host "`nA operacao foi cancelada.`n" -ForegroundColor Yellow
-        pause
-        Clear-Host
-        return
+    if ((Read-Host "Pressione Enter para continuar ou 'N' para cancelar") -eq 'N') {
+        Write-Host "Cancelado." -ForegroundColor Yellow; pause; Clear-Host; return
     }
 
     foreach ($app in $installedApps) {
         Write-Host "Removendo $($app.Name)..." -ForegroundColor Green
         try {
             winget uninstall --name "$($app.Name)" --silent
-            Write-Host "$($app.Name) foi removido com sucesso.`n" -ForegroundColor Green
-        } catch {
-            Write-Host "Falha ao remover $($app.Name). Verifique manualmente." -ForegroundColor Red
+            Write-Host "$($app.Name) removido.`n" -ForegroundColor Green
+        } catch { Write-Host "Falha ao remover $($app.Name)." -ForegroundColor Red }
+    }
+
+    Write-Host "Concluido." -ForegroundColor Cyan; pause; Clear-Host
+}
+
+# ==============================================================================
+# OPCAO 11 - DOWNLOAD DE UTILITARIOS (SELECIONAVEL)
+# PARA ADICIONAR NOVO UTILITARIO: inclua um bloco @{} na lista $utils abaixo
+# ==============================================================================
+function Download-Utilities {
+    Clear-Host
+
+    # ------------------------------------------------------------------
+    # LISTA DE UTILITARIOS DISPONIVEIS
+    # Para adicionar: copie um bloco @{} e ajuste Name, File e Source
+    # Source pode ser "git" (baixa do GitHub) ou "url" (URL direta)
+    # ------------------------------------------------------------------
+    $utils = @(
+        @{ Name = "CrystalDiskInfo (Saude do HD/SSD)";  File = "CrystalDiskInfo.exe"; Source = "git"; Path = "Utilitarios/CrystalDiskInfo.exe" },
+        @{ Name = "Sysinternals Suite (Microsoft)";     File = "SysinternalsSuite.zip"; Source = "git"; Path = "Utilitarios/SysinternalsSuite.zip" },
+        @{ Name = "BlueScreenView (Analise de BSOD)";   File = "BlueScreenView.exe"; Source = "git"; Path = "Utilitarios/BlueScreenView.exe" },
+        @{ Name = "WinDirStat (Uso de disco visual)";   File = "WinDirStat.exe"; Source = "git"; Path = "Utilitarios/WinDirStat.exe" },
+        @{ Name = "HWiNFO (Info de hardware)";          File = "HWiNFO.exe"; Source = "git"; Path = "Utilitarios/HWiNFO.exe" }
+        # Exemplo de URL direta:
+        # @{ Name = "Exemplo URL Direta"; File = "app.exe"; Source = "url"; Url = "https://site.com/app.exe" }
+    )
+
+    Write-Host "`n--------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "         Download de Aplicativos Utilitarios de Suporte" -ForegroundColor Gray
+    Write-Host "--------------------------------------------------------------`n" -ForegroundColor DarkGray
+    Write-Host "Utilitarios disponiveis:`n" -ForegroundColor Cyan
+
+    for ($i = 0; $i -lt $utils.Count; $i++) {
+        $num = $i + 1
+        Write-Host "$num) $($utils[$i].Name)" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "T) Baixar TODOS os utilitarios" -ForegroundColor Green
+    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
+    Write-Host ""
+
+    $choice = Read-Host "Digite o numero do utilitario desejado (ou T para todos)"
+
+    if ($choice -eq "0") { Clear-Host; return }
+
+    # Monta lista do que vai baixar
+    $toDownload = @()
+    if ($choice.ToUpper() -eq "T") {
+        $toDownload = $utils
+    } else {
+        $idx = 0
+        if ([int]::TryParse($choice, [ref]$idx) -and $idx -ge 1 -and $idx -le $utils.Count) {
+            $toDownload = @($utils[$idx - 1])
+        } else {
+            Write-Host "Opcao invalida." -ForegroundColor Red
+            Start-Sleep -Seconds 2; Download-Utilities; return
         }
     }
 
-    Write-Host "Todos os aplicativos especificados foram processados." -ForegroundColor Cyan
+    Write-Host ""
+    foreach ($util in $toDownload) {
+        $destPath = Join-Path $UtilsPath $util.File
+
+        # Verifica se ja existe
+        if (Test-Path $destPath) {
+            $overwrite = Read-Host "$($util.Name) ja existe. Sobrescrever? (S/N)"
+            if ($overwrite -notmatch "^[Ss]$") {
+                Write-Host "Pulando $($util.Name)." -ForegroundColor Yellow; continue
+            }
+        }
+
+        Write-Host "Baixando: $($util.Name)..." -ForegroundColor Cyan
+        try {
+            if ($util.Source -eq "git") {
+                Download-FromGit $util.Path $destPath
+            } elseif ($util.Source -eq "url") {
+                Invoke-WebRequest -Uri $util.Url -OutFile $destPath -UseBasicParsing -EA Stop
+            }
+            Write-Host "$($util.Name) baixado com sucesso!" -ForegroundColor Green
+        } catch {
+            Write-Host "Falha ao baixar $($util.Name): $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+
+    Write-Host "`nArquivos salvos em: $UtilsPath" -ForegroundColor Green
+    Write-Host ""
     pause
     Clear-Host
 }
 
-# =========================
-# USUARIOS LOCAIS
-# =========================
-
+# ==============================================================================
+# OPCAO 12 - GERENCIADOR DE USUARIOS LOCAIS
+# ==============================================================================
 function Show-ActiveLocalUsers {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "         Lista dos Usuarios Locais e Ativos do Windows" -ForegroundColor Green
+    Write-Host "         Usuarios Locais Ativos" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-
     $localUsers = Get-LocalUser | Where-Object { $_.Enabled -eq $true }
-
-    if ($localUsers) {
-        foreach ($user in $localUsers) {
-            Write-Host $user.Name -ForegroundColor Cyan
-        }
-    } else {
-        Write-Host "Nenhum usuario ativo encontrado." -ForegroundColor Yellow
-    }
-
+    if ($localUsers) { foreach ($u in $localUsers) { Write-Host $u.Name -ForegroundColor Cyan } }
+    else { Write-Host "Nenhum usuario ativo." -ForegroundColor Yellow }
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host ""
-    pause
-    Manage-LocalUsers
+    pause; Manage-LocalUsers
 }
 
 function Show-LocalAdminUsers {
@@ -908,117 +819,62 @@ function Show-LocalAdminUsers {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
     Write-Host "            Usuarios do Grupo Administradores" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-
     $domain = (Get-WmiObject Win32_ComputerSystem).Domain
-    $isDomainJoined = $domain -ne (Get-WmiObject Win32_ComputerSystem).Name
-
-    if ($isDomainJoined) {
-        Write-Host "`nO computador esta no dominio: $domain" -ForegroundColor Yellow
-        Write-Host "Listando membros usando 'net localgroup'`n" -ForegroundColor Green
-        cmd /c "net localgroup Administradores"
+    $isDomain = $domain -ne (Get-WmiObject Win32_ComputerSystem).Name
+    if ($isDomain) {
+        Write-Host "Dominio: $domain" -ForegroundColor Yellow; cmd /c "net localgroup Administradores"
     } else {
-        Write-Host "`nO computador esta em um grupo de trabalho: $domain" -ForegroundColor Yellow
         try {
             $admins = Get-LocalGroupMember -Group "Administradores"
-
-            if ($admins) {
-                Write-Host "`nMembros do grupo Administradores:" -ForegroundColor Green
-                foreach ($admin in $admins) {
-                    Write-Host $admin.Name -ForegroundColor Cyan
-                }
-            } else {
-                Write-Host "Nenhum usuario administrador encontrado." -ForegroundColor Yellow
-            }
-        } catch {
-            Write-Host "`nErro ao acessar os membros do grupo Administradores." -ForegroundColor Red
-            Write-Host "Verifique se voce tem permissoes administrativas." -ForegroundColor Yellow
-        }
+            if ($admins) { foreach ($a in $admins) { Write-Host $a.Name -ForegroundColor Cyan } }
+            else { Write-Host "Nenhum administrador." -ForegroundColor Yellow }
+        } catch { Write-Host "Erro ao acessar grupo." -ForegroundColor Red }
     }
-
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host ""
-    pause
-    Manage-LocalUsers
+    pause; Manage-LocalUsers
 }
 
 function Create-NewLocalUser {
     Clear-Host
     Write-Host "==========================================" -ForegroundColor Green
-    Write-Host "          CRIAR NOVO USUARIO LOCAL" -ForegroundColor Green
+    Write-Host "       CRIAR NOVO USUARIO LOCAL" -ForegroundColor Green
     Write-Host "==========================================" -ForegroundColor Green
-
     do {
-        Write-Host ""
-        $username = Read-Host "Digite o nome do novo usuario (ou pressione '0' para voltar ao menu anterior)"
-
-        if (-not $username) {
-            Write-Host "`nO nome do usuario nao pode estar em branco." -ForegroundColor Red
-            continue
-        }
-
-        if ($username -eq "0") {
-            Write-Host "`nRetornando ao menu anterior..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-            Manage-LocalUsers
-            return
-        }
-
-        if ($username -notmatch '^[a-zA-Z0-9._-]+$') {
-            Write-Host "`nO nome do usuario contem caracteres invalidos." -ForegroundColor Red
-            continue
-        }
-
-        Write-Host "`nO nome do novo usuario sera: $username" -ForegroundColor Yellow
-        $confirm = Read-Host "Confirme o nome do usuario (S/N)"
-        if ($confirm -eq "S" -or $confirm -eq "s") {
-            $existingUser = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
-            if ($existingUser) {
-                Write-Host "`nO usuario '$username' ja existe." -ForegroundColor Red
-                $createNew = Read-Host "Deseja criar o usuario com outro nome? (S/N)"
-                if ($createNew -eq "N" -or $createNew -eq "n") {
-                    Clear-Host
-                    Manage-LocalUsers
-                    return
-                }
-            } else {
-                break
-            }
+        $username = Read-Host "Nome do usuario (ou '0' para voltar)"
+        if (-not $username) { Write-Host "Nome nao pode ser vazio." -ForegroundColor Red; continue }
+        if ($username -eq "0") { Manage-LocalUsers; return }
+        if ($username -notmatch '^[a-zA-Z0-9._-]+$') { Write-Host "Caracteres invalidos." -ForegroundColor Red; continue }
+        Write-Host "Nome: $username" -ForegroundColor Yellow
+        if ((Read-Host "Confirmar? (S/N)") -in @("S","s")) {
+            $existing = Get-LocalUser -Name $username -EA SilentlyContinue
+            if ($existing) {
+                Write-Host "Usuario '$username' ja existe." -ForegroundColor Red
+                if ((Read-Host "Outro nome? (S/N)") -in @("N","n")) { Manage-LocalUsers; return }
+            } else { break }
         }
     } while ($true)
 
     do {
-        $password = Read-Host "`nDigite a senha do novo usuario" -AsSecureString
-        $confirmPassword = Read-Host "Confirme a senha digitada" -AsSecureString
-
-        if (([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))) -ne
-            ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($confirmPassword)))) {
-            Write-Host "`nAs senhas digitadas nao coincidem. Tente novamente." -ForegroundColor Red
-        } else {
-            Write-Host "`nSenha confirmada com sucesso." -ForegroundColor Green
-            break
-        }
+        $password = Read-Host "Senha" -AsSecureString
+        $confirmPassword = Read-Host "Confirme a senha" -AsSecureString
+        $p1 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+        $p2 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($confirmPassword))
+        if ($p1 -ne $p2) { Write-Host "Senhas nao coincidem." -ForegroundColor Red }
+        else { Write-Host "Senha confirmada." -ForegroundColor Green; break }
     } while ($true)
 
     New-LocalUser -Name $username -Password $password | Out-Null
-
-    $addToAdminsGroup = Read-Host "Deseja adicionar o usuario ao grupo Administradores? (S/N)"
-    if ($addToAdminsGroup -eq "S" -or $addToAdminsGroup -eq "s") {
+    if ((Read-Host "Adicionar ao grupo Administradores? (S/N)") -in @("S","s")) {
         Add-LocalGroupMember -Group "Administradores" -Member $username
-        Write-Host "`nUsuario '$username' criado e adicionado ao grupo Administradores." -ForegroundColor Green
+        Write-Host "Usuario '$username' criado como Administrador." -ForegroundColor Green
     } else {
-        $GUsers = Get-LocalGroup | Where-Object { $_.SID -eq 'S-1-5-32-545' }
-        Add-LocalGroupMember -Group $GUsers -Member $username
-        Write-Host "`nUsuario '$username' criado no grupo Local padrao." -ForegroundColor Green
+        $gu = Get-LocalGroup | Where-Object { $_.SID -eq 'S-1-5-32-545' }
+        Add-LocalGroupMember -Group $gu -Member $username
+        Write-Host "Usuario '$username' criado no grupo padrao." -ForegroundColor Green
     }
-
     Set-LocalUser -Name $username -PasswordNeverExpires 1
-
     Write-Host "==========================================" -ForegroundColor Green
-    Write-Host "             PROCESSO FINALIZADO" -ForegroundColor Green
-    Write-Host "==========================================" -ForegroundColor Green
-
-    pause
-    Manage-LocalUsers
+    pause; Manage-LocalUsers
 }
 
 function Create-HtiUser {
@@ -1026,235 +882,117 @@ function Create-HtiUser {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
     Write-Host "            CRIAR USUARIO HTI ADMINISTRADOR" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-
     $username = "HTI"
-    $existingUser = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
-
-    if ($existingUser) {
-        Write-Host "`nO usuario '$username' ja existe neste Windows." -ForegroundColor Red
-        Write-Host "`nRetornando ao menu anterior ..."
-        Start-Sleep -Seconds 2
-        Manage-LocalUsers
-        return
+    if (Get-LocalUser -Name $username -EA SilentlyContinue) {
+        Write-Host "Usuario '$username' ja existe." -ForegroundColor Red
+        Start-Sleep -Seconds 2; Manage-LocalUsers; return
     }
-
     do {
-        $password = Read-Host "Digite a senha do usuario HTI" -AsSecureString
-        $passwordConfirmation = Read-Host "Confirme a senha digitada" -AsSecureString
-
-        $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
-        $plainPasswordConfirmation = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($passwordConfirmation))
-
-        if ($plainPassword -ne $plainPasswordConfirmation) {
-            Write-Host "`nAs senhas digitadas nao coincidem. Tente novamente." -ForegroundColor Red
-        } else {
-            Write-Host "`nSenha confirmada com sucesso!" -ForegroundColor Green
-            break
-        }
+        $password = Read-Host "Senha do usuario HTI" -AsSecureString
+        $pc = Read-Host "Confirme a senha" -AsSecureString
+        $p1 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+        $p2 = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($pc))
+        if ($p1 -ne $p2) { Write-Host "Senhas nao coincidem." -ForegroundColor Red }
+        else { Write-Host "Senha confirmada!" -ForegroundColor Green; break }
     } while ($true)
-
     New-LocalUser -Name $username -Password $password | Out-Null
     Add-LocalGroupMember -Group "Administradores" -Member $username
-    Write-Host "`nUsuario $username criado no grupo Administradores`n" -ForegroundColor Green
     Set-LocalUser -Name $username -PasswordNeverExpires 1
-
-    $enableRDP = Read-Host "Deseja ativar a Area de Trabalho Remota do Windows? (S/N)"
-    if ($enableRDP -match "^[sS]$") {
+    Write-Host "Usuario HTI criado como Administrador." -ForegroundColor Green
+    if ((Read-Host "Ativar Area de Trabalho Remota (RDP)? (S/N)") -match "^[sS]$") {
         try {
-            Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-            $rdpRules = Get-NetFirewallRule | Where-Object { $_.DisplayName -like "*Remote Desktop*" }
-            if ($rdpRules) {
-                $rdpRules | ForEach-Object { Enable-NetFirewallRule -Name $_.Name }
-                Write-Host "`nRegras de firewall do RDP ativadas com sucesso!" -ForegroundColor Green
-            } else {
-                Write-Host "`nNao foi possivel localizar as regras de firewall do RDP." -ForegroundColor Yellow
-            }
-        } catch {
-            Write-Host "`nErro ao ativar a Area de Trabalho Remota." -ForegroundColor Red
-        }
-    } else {
-        Write-Host "`nArea de Trabalho Remota nao foi ativada." -ForegroundColor Yellow
+            Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 0
+            $rdp = Get-NetFirewallRule | Where-Object { $_.DisplayName -like "*Remote Desktop*" }
+            if ($rdp) { $rdp | ForEach-Object { Enable-NetFirewallRule -Name $_.Name }; Write-Host "RDP ativado." -ForegroundColor Green }
+            else { Write-Host "Regras de firewall RDP nao encontradas." -ForegroundColor Yellow }
+        } catch { Write-Host "Erro ao ativar RDP." -ForegroundColor Red }
     }
-
-    Start-Sleep -Seconds 2
-    pause
-    Manage-LocalUsers
+    Start-Sleep -Seconds 2; pause; Manage-LocalUsers
 }
 
 function Change-LocalUserPassword {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "            Trocar a Senha de um Usuario Local" -ForegroundColor Green
+    Write-Host "            Trocar Senha de Usuario Local" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-    Write-Output "`nQual usuario abaixo deseja trocar a senha?"
-
-    $localUsers = Get-LocalUser | Where-Object { $_.Enabled -eq $true }
-    $localUsers | Select-Object -ExpandProperty Name
-    Write-Host "`nSe deseja remover a senha de um usuario, eh so deixar em branco e confirmar" -ForegroundColor Yellow
-
-    $username = Read-Host "`nDigite o nome do usuario para alterar a senha"
-    $userExists = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
-    if (-not $userExists) {
-        Write-Host "O usuario '$username' nao existe." -ForegroundColor Yellow
-        Write-Host "`nRetornando ao menu anterior ..."
-        Start-Sleep -Seconds 3
-        Manage-LocalUsers
-        return
+    Get-LocalUser | Where-Object { $_.Enabled } | Select-Object -ExpandProperty Name
+    Write-Host "(Deixe em branco para remover a senha)" -ForegroundColor Yellow
+    $username = Read-Host "Nome do usuario"
+    if (-not (Get-LocalUser -Name $username -EA SilentlyContinue)) {
+        Write-Host "Usuario '$username' nao existe." -ForegroundColor Yellow; Start-Sleep -Seconds 3; Manage-LocalUsers; return
     }
-
     do {
-        $newPassword = Read-Host "Digite a nova senha" -AsSecureString
-        $passwordConfirmation = Read-Host "Confirme a nova senha" -AsSecureString
-
-        $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringUni([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($newPassword))
-        $plainConfirmation = [System.Runtime.InteropServices.Marshal]::PtrToStringUni([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($passwordConfirmation))
-
-        if ($plainPassword -ne $plainConfirmation) {
-            Write-Host "`nAs senhas digitadas nao coincidem. Tente novamente." -ForegroundColor Red
-        } else {
-            Write-Host "`nSenha confirmada com sucesso!" -ForegroundColor Green
-            break
-        }
+        $newPass = Read-Host "Nova senha" -AsSecureString
+        $conf    = Read-Host "Confirme" -AsSecureString
+        $p1 = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServices.Marshal]::SecureStringToBSTR($newPass))
+        $p2 = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServices.Marshal]::SecureStringToBSTR($conf))
+        if ($p1 -ne $p2) { Write-Host "Senhas nao coincidem." -ForegroundColor Red }
+        else { Write-Host "Senha confirmada!" -ForegroundColor Green; break }
     } while ($true)
-
-    Set-LocalUser -Name $username -Password $newPassword
-    Write-Host "`nSenha do usuario '$username' alterada com sucesso!" -ForegroundColor Green
-    pause
-    Manage-LocalUsers
+    Set-LocalUser -Name $username -Password $newPass
+    Write-Host "Senha de '$username' alterada!" -ForegroundColor Green
+    pause; Manage-LocalUsers
 }
 
 function Enable-Disable-Remove-LocalUser {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "    Habilitar, Desabilitar ou Remover um Usuario Local" -ForegroundColor Green
+    Write-Host "    Habilitar / Desabilitar / Remover Usuario" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-    Write-Output "`nSelecione um dos usuarios abaixo:`n"
-
-    $allUsers = Get-LocalUser
-    foreach ($user in $allUsers) {
-        $status = if ($user.Enabled) { "Habilitado" } else { "Desabilitado" }
-        Write-Host "$($user.Name) ... $status"
+    Get-LocalUser | ForEach-Object {
+        $s = if ($_.Enabled) { "Habilitado" } else { "Desabilitado" }
+        Write-Host "$($_.Name) ... $s"
     }
-
-    $username = Read-Host "`nDigite o nome do usuario para habilitar, desabilitar ou remover"
-    $userExists = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
-    if (-not $userExists) {
-        Write-Host "`nO usuario '$username' nao existe." -ForegroundColor Yellow
-        Write-Host "`nRetornando ao menu anterior ..."
-        Start-Sleep -Seconds 2
-        Manage-LocalUsers
-        return
+    $username = Read-Host "Nome do usuario"
+    if (-not (Get-LocalUser -Name $username -EA SilentlyContinue)) {
+        Write-Host "Usuario nao existe." -ForegroundColor Yellow; Start-Sleep -Seconds 2; Manage-LocalUsers; return
     }
-
-    $choice = Read-Host "`nPressione 'H' para Habilitar, 'D' para Desabilitar ou 'R' para Remover"
+    $choice = Read-Host "H=Habilitar / D=Desabilitar / R=Remover"
     switch ($choice.ToUpper()) {
-        "H" {
-            Enable-LocalUser -Name "$username"
-            Write-Host "`nO usuario '$username' foi Habilitado com sucesso!`n" -ForegroundColor Green
-            pause
-            Manage-LocalUsers
-        }
-        "D" {
-            Disable-LocalUser -Name "$username"
-            Write-Host "`nO usuario '$username' foi Desabilitado com sucesso!`n" -ForegroundColor Green
-            pause
-            Manage-LocalUsers
-        }
+        "H" { Enable-LocalUser $username; Write-Host "Habilitado!" -ForegroundColor Green; pause; Manage-LocalUsers }
+        "D" { Disable-LocalUser $username; Write-Host "Desabilitado!" -ForegroundColor Green; pause; Manage-LocalUsers }
         "R" {
-            Write-Host "`nATENCAO: Remover um usuario e uma acao irreversivel." -ForegroundColor Red
-            Write-Host "Isso pode causar perda de informacoes associadas ao usuario '$username'."
-            $confirmRemove = Read-Host "`nTem certeza que deseja remover o usuario '$username'? Digite 'Sim' para confirmar ou pressione Enter para cancelar"
-            if ($confirmRemove -ne "Sim") {
-                Write-Host "`nOperacao cancelada. O usuario '$username' NAO foi removido." -ForegroundColor Yellow
-                pause
-                Manage-LocalUsers
-                return
-            }
-
-            Remove-LocalUser -Name "$username"
-            Write-Host "`nO usuario '$username' foi removido com sucesso!" -ForegroundColor Green
-            pause
-            Manage-LocalUsers
+            Write-Host "ATENCAO: acao irreversivel!" -ForegroundColor Red
+            if ((Read-Host "Digite 'Sim' para confirmar") -eq "Sim") {
+                Remove-LocalUser $username; Write-Host "Removido!" -ForegroundColor Green
+            } else { Write-Host "Cancelado." -ForegroundColor Yellow }
+            pause; Manage-LocalUsers
         }
-        default {
-            Write-Host "`nOpcao invalida." -ForegroundColor Yellow
-            Write-Host "`nRetornando ao menu anterior ..."
-            Start-Sleep -Seconds 3
-            Manage-LocalUsers
-        }
+        default { Write-Host "Opcao invalida." -ForegroundColor Yellow; Start-Sleep -Seconds 3; Manage-LocalUsers }
     }
 }
 
 function Add-Remove-UserFromAdminGroup {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "Adicionar ou Remover Usuario do Grupo Administradores" -ForegroundColor Green
+    Write-Host "Adicionar / Remover do Grupo Administradores" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-
     $domain = (Get-WmiObject Win32_ComputerSystem).Domain
-    $isDomainJoined = $domain -ne (Get-WmiObject Win32_ComputerSystem).Name
-
-    if ($isDomainJoined) {
-        Write-Host "`nO computador esta no dominio: $domain" -ForegroundColor Yellow
-        Write-Host "`nListando os Usuarios no Grupo Administradores'`n" -ForegroundColor Green
-        cmd /c "net localgroup Administradores"
-    } else {
-        Write-Host "`nO computador esta em um grupo de trabalho: $domain" -ForegroundColor Yellow
+    $isDomain = $domain -ne (Get-WmiObject Win32_ComputerSystem).Name
+    if ($isDomain) { cmd /c "net localgroup Administradores" }
+    else {
         try {
             $admins = Get-LocalGroupMember -Group "Administradores"
-
-            if ($admins) {
-                Write-Host "`nMembros do grupo Administradores:" -ForegroundColor Green
-                foreach ($admin in $admins) {
-                    Write-Host $admin.Name -ForegroundColor Cyan
-                }
-            } else {
-                Write-Host "`nNenhum usuario administrador encontrado." -ForegroundColor Yellow
-            }
-        } catch {
-            Write-Host "`nErro ao acessar os membros do grupo Administradores." -ForegroundColor Red
-        }
+            if ($admins) { $admins | ForEach-Object { Write-Host $_.Name -ForegroundColor Cyan } }
+        } catch { Write-Host "Erro ao listar grupo." -ForegroundColor Red }
     }
-
-    $username = Read-Host "`nDigite o nome do usuario"
-
-    if (-not $isDomainJoined) {
-        $userExists = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
-        if (-not $userExists) {
-            Write-Host "`nO usuario '$username' nao existe.`n" -ForegroundColor Red
-            pause
-            return
-        }
+    $username = Read-Host "Nome do usuario"
+    if (-not $isDomain -and -not (Get-LocalUser -Name $username -EA SilentlyContinue)) {
+        Write-Host "Usuario nao existe." -ForegroundColor Red; pause; return
     }
-
     $hostname = $env:COMPUTERNAME
-    $choice = Read-Host "Pressione 'A' para Adicionar ou 'R' para Remover"
-    switch ($choice.ToUpper()) {
+    switch ((Read-Host "A=Adicionar / R=Remover").ToUpper()) {
         "A" {
-            if ($isDomainJoined) {
-                cmd /c "net localgroup Administradores $username /add"
-            } else {
-                Add-LocalGroupMember -Group "Administradores" -Member "$hostname\$username"
-            }
-            Write-Host "Operacao concluida." -ForegroundColor Green
-            pause
-            Manage-LocalUsers
+            if ($isDomain) { cmd /c "net localgroup Administradores $username /add" }
+            else { Add-LocalGroupMember -Group "Administradores" -Member "$hostname\$username" }
+            Write-Host "Concluido." -ForegroundColor Green; pause; Manage-LocalUsers
         }
         "R" {
-            if ($isDomainJoined) {
-                cmd /c "net localgroup Administradores $username /delete"
-            } else {
-                Remove-LocalGroupMember -Group "Administradores" -Member "$hostname\$username"
-            }
-            Write-Host "Operacao concluida." -ForegroundColor Green
-            pause
-            Manage-LocalUsers
+            if ($isDomain) { cmd /c "net localgroup Administradores $username /delete" }
+            else { Remove-LocalGroupMember -Group "Administradores" -Member "$hostname\$username" }
+            Write-Host "Concluido." -ForegroundColor Green; pause; Manage-LocalUsers
         }
-        default {
-            Write-Host "Opcao invalida." -ForegroundColor Red
-            Start-Sleep -Seconds 2
-            Manage-LocalUsers
-        }
+        default { Write-Host "Opcao invalida." -ForegroundColor Red; Start-Sleep -Seconds 2; Manage-LocalUsers }
     }
 }
 
@@ -1263,20 +1001,15 @@ function Manage-LocalUsers {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
     Write-Host "              Gerenciador de Usuarios Locais" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Green
-
-    Write-Host "1) Mostrar os Usuarios locais do Windows que estao ativos"
-    Write-Host "2) Mostrar os usuarios locais do grupo administradores"
-    Write-Host "3) Criar um novo usuario local"
-    Write-Host "4) Criar um novo usuario HTI como Administrador"
-    Write-Host "5) Trocar a senha de um usuario local"
-    Write-Host "6) Habilitar, Desabilitar ou Remover um usuario local"
-    Write-Host "7) Adicionar ou remover um usuario do grupo Administradores"
-    Write-Host ""
-    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
-
-    $userOption = Read-Host "`nEscolha uma opcao"
-
-    switch ($userOption) {
+    Write-Host "1) Usuarios locais ativos"
+    Write-Host "2) Usuarios do grupo Administradores"
+    Write-Host "3) Criar novo usuario local"
+    Write-Host "4) Criar usuario HTI Administrador"
+    Write-Host "5) Trocar senha de usuario local"
+    Write-Host "6) Habilitar / Desabilitar / Remover usuario"
+    Write-Host "7) Adicionar / Remover do grupo Administradores"
+    Write-Host ""; Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
+    switch (Read-Host "`nOpcao") {
         "1" { Show-ActiveLocalUsers }
         "2" { Show-LocalAdminUsers }
         "3" { Create-NewLocalUser }
@@ -1285,286 +1018,29 @@ function Manage-LocalUsers {
         "6" { Enable-Disable-Remove-LocalUser }
         "7" { Add-Remove-UserFromAdminGroup }
         "0" { Clear-Host; return }
-        default { Write-Host "Opcao invalida. Por favor, escolha novamente." }
+        default { Write-Host "Opcao invalida." }
     }
 }
 
-# =========================
-# DISCO / MONITORAMENTO
-# =========================
-
-function Check-SSDHealth {
-    Clear-Host
-    try {
-        $physicalDisks = Get-PhysicalDisk
-        foreach ($disk in $physicalDisks) {
-            Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
-            Write-Host "Informacoes do Disco Fisico: $($disk.DeviceID)" -ForegroundColor Green
-            Write-Host "Modelo: $($disk.Model)" -ForegroundColor Green
-            Write-Host "Saude Operacional: $($disk.HealthStatus)" -ForegroundColor Green
-            Write-Host "Status Operacional: $($disk.OperationalStatus)" -ForegroundColor Green
-            Write-Host "Tipo de Midia: $($disk.MediaType)" -ForegroundColor Green
-            Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
-        }
-    } catch {
-        Write-Host "Nao foi possivel obter informacoes sobre os discos fisicos: $($_.Exception.Message)" -ForegroundColor Red
-    }
-    pause
-    Disk-ManagementMenu
-}
-
-function Check-DiskUsage {
-    param (
-        [string]$DriveLetter = "C:",
-        [int]$Threshold = 0
-    )
-
-    try {
-        $drive = Get-PSDrive -Name $DriveLetter.TrimEnd(':') -ErrorAction Stop
-        $computerName = $env:COMPUTERNAME
-        $ipAddress = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike '*Loopback*' }).IPAddress
-        $currentUser = $env:USERNAME
-
-        $usedSpacePercent = [math]::Round((($drive.Used / ($drive.Free + $drive.Used)) * 100), 2)
-
-        Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
-        Write-Host "Informacoes sobre a unidade: $DriveLetter" -ForegroundColor Green
-        Write-Host "Nome do Computador: $computerName" -ForegroundColor Green
-        Write-Host "Usuario Atual: $currentUser" -ForegroundColor Green
-        Write-Host "Endereco IP: $(Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 | Select-Object -ExpandProperty IPV4Address)" -ForegroundColor Green
-        Write-Host "`nPercentual de Uso: ${usedSpacePercent}%" -ForegroundColor Green
-        Write-Host "`nEspaco Total: $([math]::Round(($drive.Free + $drive.Used) / 1GB, 2)) GB" -ForegroundColor Green
-        Write-Host "Espaco Livre: $([math]::Round($drive.Free / 1GB, 2)) GB" -ForegroundColor Green
-        Write-Host "Espaco Usado: $([math]::Round($drive.Used / 1GB, 2)) GB" -ForegroundColor Green
-        Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
-
-        if ($usedSpacePercent -ge $Threshold) {
-            Write-Host "ALERTA: O disco $DriveLetter esta com ${usedSpacePercent}% de uso, acima do limite de ${Threshold}%!" -ForegroundColor Red
-        }
-
-        $sendEmail = Read-Host "Deseja enviar essas informacoes por e-mail? (S/N - padrao: N)"
-        if ([string]::IsNullOrWhiteSpace($sendEmail) -or $sendEmail -match "^[Nn]$") {
-            Write-Host "Relatorio nao sera enviado por e-mail." -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-            Disk-ManagementMenu
-        } elseif ($sendEmail -match "^[Ss]$") {
-            $subject = "Relatorio de Uso do Disco - $DriveLetter ($computerName)"
-            $body = @"
-Relatorio de Uso do Disco - Unidade $DriveLetter
-
-Informacoes do Computador:
-- Nome do Computador: $computerName
-- Usuario Atual: $currentUser
-- Endereco IP: $ipAddress
-
-Informacoes do Disco:
-- Percentual de Uso: ${usedSpacePercent}%
-- Espaco Total: $([math]::Round(($drive.Free + $drive.Used) / 1GB, 2)) GB
-- Espaco Livre: $([math]::Round($drive.Free / 1GB, 2)) GB
-- Espaco Usado: $([math]::Round($drive.Used / 1GB, 2)) GB
-
-Recomendado liberar espaco imediatamente!!!
-"@
-            Send-Email -Subject $subject -Body $body
-        } else {
-            Write-Host "Relatorio nao sera enviado por e-mail." -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-            Disk-ManagementMenu
-        }
-
-    } catch {
-        Write-Host "A unidade '$DriveLetter' nao foi encontrada." -ForegroundColor Red
-    }
-}
-
-function Select-Drive {
-    Write-Host "`nUnidades disponiveis no sistema:" -ForegroundColor Cyan
-
-    $drives = Get-PSDrive | Where-Object { $_.Provider -like "*FileSystem*" }
-
-    if ($drives.Count -eq 0) {
-        Write-Host "Nenhuma unidade de disco foi encontrada no sistema." -ForegroundColor Red
-        return $null
-    }
-
-    $drives | ForEach-Object {
-        Write-Host " - $($_.Name):\ ($([math]::Round($_.Used / 1GB, 2)) GB usados / $([math]::Round($_.Free / 1GB, 2)) GB livres)" -ForegroundColor Green
-    }
-
-    $defaultDrive = "C"
-    $driveLetter = Read-Host "`nDigite a letra da unidade que deseja verificar (Exemplo: C, D) [Default: $defaultDrive]"
-
-    if ([string]::IsNullOrWhiteSpace($driveLetter)) {
-        $driveLetter = $defaultDrive
-    }
-
-    $drive = $drives | Where-Object { $_.Name -eq $driveLetter }
-
-    if ($drive) {
-        Write-Host "Unidade encontrada: $($drive.Name)" -ForegroundColor Green
-    } else {
-        Write-Host "Unidade '$driveLetter' nao foi encontrada." -ForegroundColor Red
-        return $null
-    }
-
-    return $driveLetter
-}
-
-function Schedule-DiskMonitoring {
-    try {
-        $scriptPath = Join-Path $ScriptsPath "MonitorDisk.ps1"
-
-        if (-not (Test-Path $scriptPath)) {
-            Write-Host "`nScript MonitorDisk.ps1 nao encontrado. Baixando do GitHub..." -ForegroundColor Yellow
-            try {
-                Download-FromGit -RelativePath "Scripts/MonitorDisk.ps1" -DestinationPath $scriptPath
-                Write-Host "Script MonitorDisk.ps1 baixado e salvo em '$scriptPath'." -ForegroundColor Green
-            } catch {
-                Write-Host "Falha ao baixar o script MonitorDisk.ps1: $($_.Exception.Message)" -ForegroundColor Red
-                return
-            }
-        }
-
-        Write-Host "`nDeseja criar um agendamento para monitorar o uso do HD? [S/n]" -ForegroundColor Yellow
-        $confirm = Read-Host "(Pressione Enter para SIM)"
-        if ($confirm -and $confirm -notmatch "^[Ss]$") {
-            Write-Host "`nOperacao cancelada pelo usuario. Retornando ao menu principal..." -ForegroundColor Red
-            Start-Sleep -Seconds 2
-            Disk-ManagementMenu
-            return
-        }
-
-        Write-Host "`nEscolha a frequencia do agendamento:"
-        Write-Host "1) Diario"
-        Write-Host "2) Semanal"
-        Write-Host "3) Mensal"
-        $frequencyChoice = Read-Host "`nDigite o numero da opcao desejada"
-
-        $frequency = switch ($frequencyChoice) {
-            "1" { "DAILY" }
-            "2" { "WEEKLY" }
-            "3" { "MONTHLY" }
-            default {
-                Write-Host "Opcao invalida. Tente novamente" -ForegroundColor Red
-                Start-Sleep -Seconds 2
-                Disk-ManagementMenu
-                return
-            }
-        }
-
-        Write-Host "`nATENCAO" -ForegroundColor Yellow
-        Write-Host "O monitoramento esta pre-configurado para o disco C: com limite de 90%." -ForegroundColor Cyan
-        Write-Host "Se deseja alterar esses valores, edite diretamente o script em $scriptPath." -ForegroundColor Cyan
-
-        $taskName = "Monitoramento de Disco"
-        $taskFolder = "_HTI"
-        $folderPath = "\$taskFolder"
-
-        $service = New-Object -ComObject "Schedule.Service"
-        $service.Connect()
-        $rootFolder = $service.GetFolder("\")
-        try {
-            $rootFolder.GetFolder($folderPath) | Out-Null
-        } catch {
-            $rootFolder.CreateFolder($folderPath) | Out-Null
-        }
-
-        $taskPath = "\$taskFolder\$taskName"
-
-        if (Get-ScheduledTask -TaskName $taskName -TaskPath "\$taskFolder\" -ErrorAction SilentlyContinue) {
-            Write-Host "`nJa existe uma tarefa chamada '$taskName' na pasta '$taskFolder'." -ForegroundColor Yellow
-            $overwrite = Read-Host "Deseja substituir a tarefa existente? (S/N)"
-            if ($overwrite -notmatch "^[Ss]$") {
-                Write-Host "`nOperacao cancelada pelo usuario." -ForegroundColor Red
-                Start-Sleep -Seconds 2
-                Disk-ManagementMenu
-                return
-            }
-
-            Unregister-ScheduledTask -TaskName $taskName -TaskPath "\$taskFolder\" -Confirm:$false
-        }
-
-        switch ($frequency) {
-            "DAILY" {
-                schtasks.exe /Create /F /TN "$taskPath" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" /SC DAILY /ST 12:00 /RL HIGHEST /RU "SYSTEM"
-            }
-            "WEEKLY" {
-                schtasks.exe /Create /F /TN "$taskPath" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" /SC WEEKLY /D MON /ST 12:00 /RL HIGHEST /RU "SYSTEM"
-            }
-            "MONTHLY" {
-                schtasks.exe /Create /F /TN "$taskPath" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" /SC MONTHLY /D MON /MO FIRST /ST 12:00 /RL HIGHEST /RU "SYSTEM"
-            }
-        }
-
-        Write-Host "`nTarefa '$taskName' criada com sucesso na pasta '$taskFolder' no Agendador de Tarefas do Windows!" -ForegroundColor Green
-    } catch {
-        Write-Host "`nErro ao criar o agendamento: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    Write-Host ""
-    pause
-    Disk-ManagementMenu
-}
-
-function Disk-ManagementMenu {
-    Clear-Host
-    Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "           Status, Monitoramento e Alertas de Disco           " -ForegroundColor Green
-    Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "Escolha uma opcao:`n" -ForegroundColor Yellow
-    Write-Host "1) Verificar a saude dos discos" -ForegroundColor Cyan
-    Write-Host "2) Mostrar o Uso do HD e enviar por e-mail" -ForegroundColor Cyan
-    Write-Host "3) Criar um agendamento no Windows para monitorar o uso do HD" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
-    Write-Host "--------------------------------------------------------------" -ForegroundColor Green
-
-    $choice = Read-Host "Digite o numero da opcao desejada"
-
-    switch ($choice) {
-        "1" { Check-SSDHealth }
-        "2" {
-            $driveLetter = Select-Drive
-            if ($driveLetter -eq $null) {
-                Write-Host "Operacao cancelada." -ForegroundColor Yellow
-                return
-            }
-            $threshold = 90
-            Check-DiskUsage -DriveLetter $driveLetter -Threshold $threshold
-        }
-        "3" { Schedule-DiskMonitoring }
-        "0" { Clear-Host; return }
-        default { Write-Host "Opcao invalida." -ForegroundColor Red }
-    }
-}
-
-# =========================
-# OTIMIZACOES
-# =========================
-
+# ==============================================================================
+# OPCAO 13 - FERRAMENTAS E OTIMIZACOES
+# ==============================================================================
 function PowerUP {
-    $monitorTimeoutDC = 5
-    $standbyTimeoutDC = 10
-    $monitorTimeoutAC = 60
-    $standbyTimeoutAC = 0
-
-    $isLaptop = (Get-WmiObject -Class Win32_SystemEnclosure).ChassisTypes -match "8|9|10|11|14|18|21|30"
-
+    $monAC=60; $stbAC=0; $monDC=5; $stbDC=10
+    $isLaptop = (Get-WmiObject Win32_SystemEnclosure).ChassisTypes -match "8|9|10|11|14|18|21|30"
     if ($isLaptop) {
-        Write-Output "Dispositivo identificado como Notebook."
-        Start-Process -FilePath "powercfg" -ArgumentList "/change monitor-timeout-dc $monitorTimeoutDC" -Verb RunAs -Wait
-        Start-Process -FilePath "powercfg" -ArgumentList "/change standby-timeout-dc $standbyTimeoutDC" -Verb RunAs -Wait
-        Start-Process -FilePath "powercfg" -ArgumentList "/change monitor-timeout-ac $monitorTimeoutAC" -Verb RunAs -Wait
-        Start-Process -FilePath "powercfg" -ArgumentList "/change standby-timeout-ac $standbyTimeoutAC" -Verb RunAs -Wait
+        Write-Output "Notebook detectado."
+        powercfg /change monitor-timeout-dc $monDC
+        powercfg /change standby-timeout-dc $stbDC
+        powercfg /change monitor-timeout-ac $monAC
+        powercfg /change standby-timeout-ac $stbAC
     } else {
-        Write-Output "Dispositivo identificado como Desktop."
-        Start-Process -FilePath "powercfg" -ArgumentList "/change monitor-timeout-ac $monitorTimeoutAC" -Verb RunAs -Wait
-        Start-Process -FilePath "powercfg" -ArgumentList "/change standby-timeout-ac $standbyTimeoutAC" -Verb RunAs -Wait
+        Write-Output "Desktop detectado."
+        powercfg /change monitor-timeout-ac $monAC
+        powercfg /change standby-timeout-ac $stbAC
     }
-
-    Write-Output "Configuracoes de energia aplicadas com sucesso!"
-    pause
-    Otimizacoes-Win
+    Write-Output "Configuracoes de energia aplicadas!"
+    pause; Otimizacoes-Win
 }
 
 function WinUpdate {
@@ -1572,244 +1048,134 @@ function WinUpdate {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "           Verificando atualizacoes do Windows..." -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
-
-    $updates = Get-CimInstance -Namespace "root\ccm\clientSDK" -ClassName "CCM_SoftwareUpdate" -ErrorAction SilentlyContinue
-
-    if ($updates.Count -eq 0) {
-        Write-Host "Nenhuma atualizacao disponivel no momento." -ForegroundColor Green
+    $updates = Get-CimInstance -Namespace "root\ccm\clientSDK" -ClassName "CCM_SoftwareUpdate" -EA SilentlyContinue
+    if (-not $updates -or $updates.Count -eq 0) {
+        Write-Host "Nenhuma atualizacao disponivel." -ForegroundColor Green
     } else {
-        Write-Host "Atualizacoes disponiveis:" -ForegroundColor Yellow
         $updates | ForEach-Object { Write-Host "- $($_.ArticleID)" -ForegroundColor White }
-
-        $install = Read-Host "`nDeseja instalar todas as atualizacoes agora? (S/N)"
-        if ($install -match "[Ss]") {
-            Write-Host "`nIniciando a instalacao das atualizacoes..." -ForegroundColor Cyan
-            Start-Process -FilePath "C:\Windows\System32\UsoClient.exe" -ArgumentList "StartScan" -Wait
-            Write-Host "`nAs atualizacoes foram aplicadas com sucesso!" -ForegroundColor Green
-            Write-Host "Reinicie o computador para concluir a instalacao, se necessario." -ForegroundColor Red
-        } else {
-            Write-Host "`nAs atualizacoes nao foram instaladas." -ForegroundColor Yellow
+        if ((Read-Host "Instalar atualizacoes? (S/N)") -match "[Ss]") {
+            Start-Process "C:\Windows\System32\UsoClient.exe" -ArgumentList "StartScan" -Wait
+            Write-Host "Atualizacoes aplicadas. Reinicie se necessario." -ForegroundColor Green
         }
     }
-
-    pause
-    Otimizacoes-Win
+    pause; Otimizacoes-Win
 }
 
 function Clear-PrintSpoolerQueue {
     Write-Host "===========================================================" -ForegroundColor Yellow
-    Write-Host "INICIANDO LIMPEZA DA FILA DE IMPRESSAO" -ForegroundColor Yellow
+    Write-Host "LIMPEZA DA FILA DE IMPRESSAO" -ForegroundColor Yellow
     Write-Host "==========================================================="
-
     try {
-        Write-Host "`n[ETAPA 1] Parando o servico de Spooler (Spooler)..." -ForegroundColor Cyan
-        Stop-Service -Name Spooler -Force -ErrorAction Stop
-        Write-Host "Servico de Spooler parado com sucesso." -ForegroundColor Green
-
-        $spoolPath = Join-Path -Path $env:SystemRoot -ChildPath "System32\spool\PRINTERS"
-        Write-Host "`n[ETAPA 2] Limpando arquivos da fila em '$spoolPath'..." -ForegroundColor Cyan
-        Remove-Item -Path "$spoolPath\*" -Recurse -Force -ErrorAction Stop
-        Write-Host "Fila de impressao limpa com sucesso." -ForegroundColor Green
-    }
-    catch {
-        Write-Host "Ocorreu um erro durante a limpeza da fila de impressao: $($_.Exception.Message)" -ForegroundColor Red
-    }
+        Write-Host "`n[1] Parando Spooler..." -ForegroundColor Cyan
+        Stop-Service -Name Spooler -Force -EA Stop
+        $spoolPath = Join-Path $env:SystemRoot "System32\spool\PRINTERS"
+        Write-Host "[2] Limpando: $spoolPath..." -ForegroundColor Cyan
+        Remove-Item "$spoolPath\*" -Recurse -Force -EA Stop
+        Write-Host "Fila limpa!" -ForegroundColor Green
+    } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
     finally {
-        Write-Host "`n[ETAPA 3] Iniciando o servico de Spooler..." -ForegroundColor Cyan
-        $spoolerService = Get-Service -Name Spooler
-        if ($spoolerService.Status -ne 'Running') {
-            Start-Service -Name Spooler
-            Write-Host "Servico de Spooler iniciado com sucesso." -ForegroundColor Green
-        } else {
-            Write-Host "O servico de Spooler ja estava em execucao." -ForegroundColor Yellow
+        Write-Host "[3] Reiniciando Spooler..." -ForegroundColor Cyan
+        if ((Get-Service Spooler).Status -ne 'Running') {
+            Start-Service Spooler; Write-Host "Spooler reiniciado." -ForegroundColor Green
         }
-
-        Write-Host "`n===========================================================" -ForegroundColor Yellow
-        Write-Host "PROCESSO DE LIMPEZA CONCLUIDO." -ForegroundColor Green
         Write-Host "==========================================================="
     }
 }
 
 function Limpar-CacheTeams {
-    $confirmacao = Read-Host "`nEsta acao vai limpar o cache do Teams e desconectar a conta. Deseja continuar? (S/N) [S]"
-
-    if ($confirmacao -eq "N" -or $confirmacao -eq "n") {
-        Write-Host "Operacao cancelada pelo usuario." -ForegroundColor Yellow
-        pause
-        Otimizacoes-Win
+    if ((Read-Host "`nLimpar cache do Teams e desconectar conta? (S/N)") -in @("N","n")) {
+        Write-Host "Cancelado." -ForegroundColor Yellow; pause; Otimizacoes-Win; return
     }
-
-    Write-Host "`nIniciando limpeza de cache do Microsoft Teams..." -ForegroundColor Cyan
-
-    $processNames = @("Teams", "ms-teams")
-    foreach ($proc in $processNames) {
-        $teamsProcess = Get-Process -Name $proc -ErrorAction SilentlyContinue
-        if ($teamsProcess) {
-            Write-Host "Encerrando o processo: $proc ..." -ForegroundColor Yellow
-            Stop-Process -Name $proc -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 3
-        }
+    Write-Host "Encerrando Teams..." -ForegroundColor Cyan
+    @("Teams","ms-teams") | ForEach-Object {
+        if (Get-Process -Name $_ -EA SilentlyContinue) { Stop-Process -Name $_ -Force -EA SilentlyContinue; Start-Sleep -Seconds 3 }
     }
     Start-Sleep -Seconds 2
 
-    $legacyPath = "$env:APPDATA\Microsoft\Teams"
-    $newTeamsPath = "$env:LocalAppData\Packages\MSTeams_8wekyb3d8bbwe\LocalCache"
-    $newTeamsAltPath = "$env:LocalAppData\Microsoft\Teams"
-
     $found = $false
+    $newPath    = "$env:LocalAppData\Packages\MSTeams_8wekyb3d8bbwe\LocalCache"
+    $newAlt     = "$env:LocalAppData\Microsoft\Teams"
+    $legacyPath = "$env:APPDATA\Microsoft\Teams"
 
-    if (Test-Path $newTeamsPath) {
-        Remove-Item "$newTeamsPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "Cache da nova versao limpo com sucesso." -ForegroundColor Green
-        $found = $true
-    }
-    elseif (Test-Path $newTeamsAltPath) {
-        Remove-Item "$newTeamsAltPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "Cache da nova versao (alternativa) limpo com sucesso." -ForegroundColor Green
-        $found = $true
-    }
+    if (Test-Path $newPath)    { Remove-Item "$newPath\*" -Recurse -Force -EA SilentlyContinue; Write-Host "Cache nova versao limpo." -ForegroundColor Green; $found=$true }
+    elseif (Test-Path $newAlt) { Remove-Item "$newAlt\*" -Recurse -Force -EA SilentlyContinue; Write-Host "Cache alternativo limpo." -ForegroundColor Green; $found=$true }
     elseif (Test-Path $legacyPath) {
-        $foldersToDelete = @(
-            "Application Cache\Cache",
-            "blob_storage",
-            "Cache",
-            "databases",
-            "GPUCache",
-            "IndexedDB",
-            "Local Storage",
-            "tmp"
-        )
-
-        foreach ($folder in $foldersToDelete) {
-            $fullPath = Join-Path $legacyPath $folder
-            if (Test-Path $fullPath) {
-                Remove-Item $fullPath -Recurse -Force -ErrorAction SilentlyContinue
-            }
+        @("Application Cache\Cache","blob_storage","Cache","databases","GPUCache","IndexedDB","Local Storage","tmp") | ForEach-Object {
+            $fp = Join-Path $legacyPath $_
+            if (Test-Path $fp) { Remove-Item $fp -Recurse -Force -EA SilentlyContinue }
         }
-
-        Write-Host "Cache da versao classica limpo com sucesso." -ForegroundColor Green
-        $found = $true
+        Write-Host "Cache versao classica limpo." -ForegroundColor Green; $found=$true
     }
 
-    if (-not $found) {
-        Write-Host "Nao foi possivel localizar os arquivos de cache do Teams." -ForegroundColor Red
-    } else {
-        $teamsPaths = @(
-            "$env:LocalAppData\Microsoft\WindowsApps\ms-teams.exe",
-            "$env:LocalAppData\Microsoft\Teams\current\Teams.exe"
-        )
-
+    if (-not $found) { Write-Host "Cache do Teams nao encontrado." -ForegroundColor Red }
+    else {
         $started = $false
-        foreach ($path in $teamsPaths) {
-            if (Test-Path $path) {
-                Start-Process $path
-                Write-Host "Teams iniciado com sucesso a partir de: $path" -ForegroundColor Green
-                $started = $true
-                break
-            }
+        @("$env:LocalAppData\Microsoft\WindowsApps\ms-teams.exe","$env:LocalAppData\Microsoft\Teams\current\Teams.exe") | ForEach-Object {
+            if (-not $started -and (Test-Path $_)) { Start-Process $_; Write-Host "Teams reiniciado." -ForegroundColor Green; $started=$true }
         }
-
-        if (-not $started) {
-            Write-Host "Nao foi possivel iniciar o Teams. Inicie manualmente, se necessario." -ForegroundColor Red
-        }
+        if (-not $started) { Write-Host "Inicie o Teams manualmente." -ForegroundColor Red }
     }
-
-    Write-Host "`nLimpeza concluida!" -ForegroundColor Green
-    pause
-    Otimizacoes-Win
+    Write-Host "Limpeza concluida!" -ForegroundColor Green; pause; Otimizacoes-Win
 }
 
 function Gerenciar-AnyDesk {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host "           Verificacao do AnyDesk ..." -ForegroundColor Cyan
+    Write-Host "           AnyDesk: Status / Instalar / Remover" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
-    Write-Host "`nATENCAO: Tanto para Instalar ou Remover sera aberta janela do Anydesk para interacao`n" -ForegroundColor Yellow
 
-    $servico = Get-Service -Name "AnyDesk" -ErrorAction SilentlyContinue
-    $processo = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
-
+    $servico = Get-Service -Name "AnyDesk" -EA SilentlyContinue
+    $processo = Get-Process -Name "AnyDesk" -EA SilentlyContinue
     $uninstalls = @()
-    $uninstalls += Get-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue
-    $uninstalls += Get-ItemProperty -Path "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue
-
+    $uninstalls += Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -EA SilentlyContinue
+    $uninstalls += Get-ItemProperty "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -EA SilentlyContinue
     $anydeskPath = ($uninstalls | Where-Object { $_.DisplayName -like "*AnyDesk*" }).InstallLocation
-    if (-not $anydeskPath -or -not (Test-Path $anydeskPath)) {
-        $anydeskPath = "C:\Program Files (x86)\AnyDesk"
-    }
-
+    if (-not $anydeskPath -or -not (Test-Path $anydeskPath)) { $anydeskPath = "C:\Program Files (x86)\AnyDesk" }
     $versao = $null
     if (Test-Path (Join-Path $anydeskPath "AnyDesk.exe")) {
         try { $versao = (Get-Item (Join-Path $anydeskPath "AnyDesk.exe")).VersionInfo.ProductVersion.Trim() } catch {}
     }
-
-    if (-not $versao -and $processo) {
-        try { $versao = ($processo | Select-Object -First 1).FileVersion.Trim() } catch {}
-    }
+    if (-not $versao -and $processo) { try { $versao = ($processo | Select-Object -First 1).FileVersion.Trim() } catch {} }
 
     if ($servico -or $processo) {
-        Write-Host "`nAnyDesk encontrado no sistema!" -ForegroundColor Green
-        if ($servico) { Write-Host "Status do Servico: $($servico.Status)" -ForegroundColor Green }
-        if ($versao) { Write-Host "Versao do AnyDesk: $versao" -ForegroundColor Green }
-        else { Write-Host "Versao do AnyDesk: Nao foi possivel obter" -ForegroundColor Yellow }
-    } else {
-        Write-Host "`nAnyDesk nao encontrado no sistema." -ForegroundColor Yellow
-    }
+        Write-Host "AnyDesk encontrado!" -ForegroundColor Green
+        if ($servico) { Write-Host "Servico: $($servico.Status)" -ForegroundColor Green }
+        if ($versao) { Write-Host "Versao: $versao" -ForegroundColor Green }
+        else { Write-Host "Versao: Nao disponivel" -ForegroundColor Yellow }
+    } else { Write-Host "AnyDesk nao encontrado no sistema." -ForegroundColor Yellow }
 
-    Write-Host "`nSelecione uma opcao:"
-    Write-Host "`n1) Instala AnyDesk (ultima versao via Winget)"
-    Write-Host "2) Baixa e executa AnyDesk versao 7 do GitHub"
-    Write-Host "3) Remover AnyDesk do computador"
-    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
-    $opcao = Read-Host "`nDigite o numero da opcao desejada"
+    Write-Host "`n1) Instalar ultima versao (Winget)"
+    Write-Host "2) Baixar e instalar AnyDesk v7 (GitHub)"
+    Write-Host "3) Remover AnyDesk"
+    Write-Host "0) Voltar" -ForegroundColor DarkGreen
 
-    switch ($opcao) {
+    switch ((Read-Host "`nOpcao")) {
         "1" {
-            Write-Host "`nInstalando ultima versao do AnyDesk via Winget..." -ForegroundColor Cyan
-            winget install AnyDesk -e --silent
-            pause
-            Otimizacoes-Win
+            Write-Host "Instalando via Winget..." -ForegroundColor Cyan
+            winget install AnyDesk -e --silent; pause; Otimizacoes-Win
         }
         "2" {
             $arquivo = Join-Path $UtilsPath "AnyDesk-v7.exe"
-
-            Write-Host "`nBaixando o instalador do AnyDesk-v7..." -ForegroundColor Cyan
+            Write-Host "Baixando AnyDesk v7..." -ForegroundColor Cyan
             try {
-                Download-FromGit -RelativePath "Utilitarios/AnyDesk-v7.exe" -DestinationPath $arquivo
-                Write-Host "Instalador do AnyDesk-v7 baixado com sucesso para '$arquivo'." -ForegroundColor Green
-            } catch {
-                Write-Host "Erro ao baixar o instalador do AnyDesk-v7: $($_.Exception.Message)" -ForegroundColor Red
-                pause
-                Gerenciar-AnyDesk
-            }
-
-            Write-Host "`nInstalando o AnyDesk v7..." -ForegroundColor Cyan
-            try {
-                Start-Process -FilePath $arquivo -ArgumentList "/S /U=1" -Wait -NoNewWindow
-                Write-Host "AnyDesk instalado com sucesso!" -ForegroundColor Green
-                pause
-                Gerenciar-AnyDesk
-            } catch {
-                Write-Host "Erro ao instalar o AnyDesk: $($_.Exception.Message)" -ForegroundColor Red
-                pause
-                Gerenciar-AnyDesk
-            }
+                Download-FromGit "Utilitarios/AnyDesk-v7.exe" $arquivo
+                Start-Process $arquivo -ArgumentList "/S /U=1" -Wait -NoNewWindow
+                Write-Host "AnyDesk v7 instalado!" -ForegroundColor Green
+            } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
+            pause; Gerenciar-AnyDesk
         }
         "3" {
-            if ($servico) { Stop-Service -Name "AnyDesk" -Force -ErrorAction SilentlyContinue }
-            if ($processo) { Stop-Process -Name "AnyDesk" -Force -ErrorAction SilentlyContinue }
-
+            if (-not ($servico -or $processo)) { Write-Host "AnyDesk nao esta instalado." -ForegroundColor Yellow; pause; Gerenciar-AnyDesk; return }
+            if ((Read-Host "Confirmar remocao? (S/N)").ToUpper() -ne "S") { Write-Host "Cancelado." -ForegroundColor Yellow; return }
+            if ($servico) { Stop-Service "AnyDesk" -Force -EA SilentlyContinue }
+            if ($processo) { Stop-Process -Name "AnyDesk" -Force -EA SilentlyContinue }
             winget uninstall AnyDesk -e --silent --force
-            Remove-Item -Recurse -Force "$env:APPDATA\AnyDesk" -ErrorAction SilentlyContinue
-            Remove-Item -Recurse -Force "$env:LOCALAPPDATA\AnyDesk" -ErrorAction SilentlyContinue
-            Remove-Item -Recurse -Force "C:\ProgramData\AnyDesk" -ErrorAction SilentlyContinue
-
-            Write-Host "`nRemocao concluida!" -ForegroundColor Green
-            pause
-            Otimizacoes-Win
+            @("$env:APPDATA\AnyDesk","$env:LOCALAPPDATA\AnyDesk","C:\ProgramData\AnyDesk") |
+                ForEach-Object { Remove-Item $_ -Recurse -Force -EA SilentlyContinue }
+            Write-Host "AnyDesk removido!" -ForegroundColor Green; pause; Otimizacoes-Win
         }
         "0" { Clear-Host; Otimizacoes-Win }
-        default { Write-Host "`nOpcao invalida. Nenhuma acao realizada." -ForegroundColor Red }
+        default { Write-Host "Opcao invalida." -ForegroundColor Red }
     }
 }
 
@@ -1818,12 +1184,8 @@ function LogsEventViewer {
     Write-Host "=================================================="
     Write-Host "     Analisador de Logs do Windows para TI"
     Write-Host "=================================================="
-    Write-Host
-    Write-Host "Essa rotina foi mantida simplificada nesta versao." -ForegroundColor Yellow
-    Write-Host "Abra o Visualizador de Eventos manualmente se precisar de analise detalhada." -ForegroundColor Cyan
-    pause
-    Clear-Host
-    Otimizacoes-Win
+    Write-Host "Simplificado nesta versao. Abra o Visualizador de Eventos manualmente." -ForegroundColor Yellow
+    pause; Clear-Host; Otimizacoes-Win
 }
 
 function CleanTemp {
@@ -1831,85 +1193,44 @@ function CleanTemp {
     Write-Host "===================================================" -ForegroundColor Green
     Write-Host " LIMPEZA DE ARQUIVOS TEMPORARIOS" -ForegroundColor Green
     Write-Host "===================================================" -ForegroundColor Green
-
     try {
-        Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "Limpeza basica concluida com sucesso." -ForegroundColor Green
-    } catch {
-        Write-Host "Erro durante a limpeza: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    pause
-    Otimizacoes-Win
+        Remove-Item "$env:TEMP\*" -Recurse -Force -EA SilentlyContinue
+        Remove-Item "C:\Windows\Temp\*" -Recurse -Force -EA SilentlyContinue
+        Write-Host "Limpeza concluida!" -ForegroundColor Green
+    } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
+    pause; Otimizacoes-Win
 }
 
 function SystemIntegrityCheck {
     Clear-Host
     Write-Host "===========================================================" -ForegroundColor Yellow
-    Write-Host "FUNCAO DE VERIFICACAO DE INTEGRIDADE DO SISTEMA" -ForegroundColor Yellow
+    Write-Host "VERIFICACAO DE INTEGRIDADE DO SISTEMA" -ForegroundColor Yellow
     Write-Host "==========================================================="
-
-    $title = "Confirmar Execucao"
-    $question = "Deseja iniciar o processo completo de verificacao e reparo?"
-    $choices = [System.Management.Automation.Host.ChoiceDescription[]]@("&Sim", "&Nao")
-    $userResponse = $host.UI.PromptForChoice($title, $question, $choices, 0)
-
-    if ($userResponse -eq 1) {
-        Write-Host "`nOperacao cancelada pelo usuario." -ForegroundColor Yellow
-        Clear-Host
-        Otimizacoes-Win
-    }
-
+    $r = $host.UI.PromptForChoice("Confirmar","Iniciar verificacao e reparo?",[System.Management.Automation.Host.ChoiceDescription[]]@("&Sim","&Nao"),0)
+    if ($r -eq 1) { Write-Host "Cancelado." -ForegroundColor Yellow; Clear-Host; Otimizacoes-Win; return }
     try {
-        Write-Host "`n[ETAPA 1 de 2] Executando o Reparo da Imagem do Windows..." -ForegroundColor Cyan
-        Repair-WindowsImage -Online -RestoreHealth -ErrorAction Stop
-        Write-Host "[SUCESSO] Etapa 1 concluida." -ForegroundColor Green
-        Start-Sleep -Seconds 3
-
-        Write-Host "`n[ETAPA 2 de 2] Executando o Verificador de Arquivos do Sistema (SFC)..." -ForegroundColor Cyan
+        Write-Host "[1/2] DISM RestoreHealth..." -ForegroundColor Cyan
+        Repair-WindowsImage -Online -RestoreHealth -EA Stop
+        Write-Host "DISM concluido." -ForegroundColor Green; Start-Sleep -Seconds 3
+        Write-Host "[2/2] SFC /scannow..." -ForegroundColor Cyan
         sfc.exe /scannow
-
-        Write-Host "`n===========================================================" -ForegroundColor Yellow
-        Write-Host "VERIFICACAO DE INTEGRIDADE CONCLUIDA!" -ForegroundColor Green
-        Write-Host "==========================================================="
-
-    } catch {
-        Write-Host "Ocorreu um erro critico durante o processo de verificacao: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    pause
-    Otimizacoes-Win
+        Write-Host "Verificacao concluida!" -ForegroundColor Green
+    } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
+    pause; Otimizacoes-Win
 }
 
 function NetworkStackReset {
     Clear-Host
     Write-Host "================== Reset de Rede ==================" -ForegroundColor Yellow
-
-    $title = "Confirmar Reset da Rede"
-    $question = "Prosseguir com a redefinicao de rede?"
-    $choices = [System.Management.Automation.Host.ChoiceDescription[]]@("&Sim, continuar", "&Nao, cancelar")
-    $finalResponse = $host.UI.PromptForChoice($title, $question, $choices, 1)
-
-    if ($finalResponse -ne 0) {
-        Write-Host "`nOperacao cancelada pelo usuario." -ForegroundColor Yellow
-        return
-    }
-
+    $r = $host.UI.PromptForChoice("Confirmar","Prosseguir?",[System.Management.Automation.Host.ChoiceDescription[]]@("&Sim","&Nao"),1)
+    if ($r -ne 0) { Write-Host "Cancelado." -ForegroundColor Yellow; return }
     try {
         Clear-DnsClientCache
-        ipconfig /release | Out-Null
-        ipconfig /renew | Out-Null
-        netsh.exe winsock reset | Out-Null
-        netsh.exe int ip reset | Out-Null
-
-        Write-Host "`nPROCESSO DE RESET DE REDE CONCLUIDO COM SUCESSO!" -ForegroundColor Green
-    } catch {
-        Write-Host "Ocorreu um erro inesperado durante a redefinicao de rede: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    pause
-    Otimizacoes-Win
+        ipconfig /release | Out-Null; ipconfig /renew | Out-Null
+        netsh.exe winsock reset | Out-Null; netsh.exe int ip reset | Out-Null
+        Write-Host "Reset de rede concluido!" -ForegroundColor Green
+    } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
+    pause; Otimizacoes-Win
 }
 
 function Otimizacoes-Win {
@@ -1917,150 +1238,222 @@ function Otimizacoes-Win {
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Green
     Write-Host "           Ferramentas e Otimizacoes do Windows" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Green
+    Write-Host "1)  Gerenc. Energia - Sempre ativo"           -ForegroundColor Green
+    Write-Host "2)  Atualizacao do Windows"                   -ForegroundColor Green
+    Write-Host "3)  Microsoft PowerToys - PENDENTE"           -ForegroundColor DarkGray
+    Write-Host "4)  Atualizacao de Drivers - PENDENTE"        -ForegroundColor DarkGray
+    Write-Host "5)  Limpeza da Fila de Impressao"             -ForegroundColor Green
+    Write-Host "6)  Atualizar programas (Winget) - PENDENTE"  -ForegroundColor DarkGray
+    Write-Host "7)  Limpeza de arquivos temporarios"          -ForegroundColor Green
+    Write-Host "8)  Verificacao do disco - PENDENTE"          -ForegroundColor DarkGray
+    Write-Host "9)  Integridade do sistema (DISM + SFC)"      -ForegroundColor Green
+    Write-Host "10) Reset de Rede"                            -ForegroundColor Green
+    Write-Host "11) Logs do EventViewer"                      -ForegroundColor Green
+    Write-Host "12) Todas as opcoes - PENDENTE"               -ForegroundColor DarkGray
+    Write-Host "13) Limpeza de cache do Teams"                -ForegroundColor Green
+    Write-Host "14) AnyDesk: Status / Instalar / Remover"     -ForegroundColor Green
+    Write-Host ""; Write-Host "0) Voltar ao menu principal"   -ForegroundColor DarkGreen
 
-    Write-Host "1) Gerenc. Energia - Sempre ativo" -ForegroundColor Green
-    Write-Host "2) Atualizacao do Windows" -ForegroundColor Green
-    Write-Host "3) Instalar o Microsoft PowerToys - PENDENTE" -ForegroundColor DarkGray
-    Write-Host "4) Atualizacao dos Drivers - PENDENTE" -ForegroundColor DarkGray
-    Write-Host "5) Limpeza Fila de Impressao" -ForegroundColor Green
-    Write-Host "6) Atualiza todos os programas instalados pelo Winget - PENDENTE" -ForegroundColor DarkGray
-    Write-Host "7) Limpeza de arquivos temporarios" -ForegroundColor Green
-    Write-Host "8) Verificacao do disco - PENDENTE" -ForegroundColor DarkGray
-    Write-Host "9) Checagem da integridade do sistema" -ForegroundColor Green
-    Write-Host "10) Reset de Rede" -ForegroundColor Green
-    Write-Host "11) Visualizador Logs EventViewer" -ForegroundColor Green
-    Write-Host "12) Todas as opcoes acima - PENDENTE" -ForegroundColor DarkGray
-    Write-Host "13) Limpeza inteligente de cache do Teams" -ForegroundColor Green
-    Write-Host "14) Anydesk: Status / Instala / Remover" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
-
-    $userOption = Read-Host "`nEscolha uma opcao"
-
-    switch ($userOption) {
-        "1" { PowerUP }
-        "2" { WinUpdate }
-        "3" { InstallPowerToys }
-        "4" { UpdateDrivers }
-        "5" { Clear-PrintSpoolerQueue }
-        "6" { UpdatePrograms }
-        "7" { CleanTemp }
-        "8" { CheckDisk }
-        "9" { SystemIntegrityCheck }
+    switch (Read-Host "`nOpcao") {
+        "1"  { PowerUP }
+        "2"  { WinUpdate }
+        "3"  { Write-Host "Pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
+        "4"  { Write-Host "Pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
+        "5"  { Clear-PrintSpoolerQueue; pause; Otimizacoes-Win }
+        "6"  { Write-Host "Pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
+        "7"  { CleanTemp }
+        "8"  { Write-Host "Pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
+        "9"  { SystemIntegrityCheck }
         "10" { NetworkStackReset }
         "11" { LogsEventViewer }
-        "12" { TodasFuncoes }
+        "12" { Write-Host "Pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
         "13" { Limpar-CacheTeams }
         "14" { Gerenciar-AnyDesk }
-        "0" { Clear-Host; Main }
-        default { Write-Host "Opcao invalida. Por favor, escolha novamente." }
+        "0"  { Clear-Host; Main }
+        default { Write-Host "Opcao invalida." }
     }
 }
 
-# =========================
-# PENDENTES / PLACEHOLDERS
-# =========================
-
-function Install-Bitdefender { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Main }
-function Install-LegalPackage { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Main }
-function Install-AccountingPackage { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Main }
-function InstallPowerToys { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
-function UpdateDrivers { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
-function UpdatePrograms { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
-function CheckDisk { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
-function TodasFuncoes { Write-Host "Funcao pendente." -ForegroundColor Yellow; pause; Otimizacoes-Win }
-
-# =========================
-# LIMPEZA / CHANGELOG / MAIN
-# =========================
-
-function Remove-HTIFiles {
-    $files = @(
-        (Join-Path $ScriptsPath "Script-Inicial.ps1"),
-        (Join-Path $ScriptsPath "clientes.csv")
-    )
-
-    foreach ($file in $files) {
-        if (Test-Path $file) {
-            Remove-Item -Path $file -Force -ErrorAction SilentlyContinue
+# ==============================================================================
+# OPCAO 14 - MONITORAMENTO DE DISCO
+# ==============================================================================
+function Check-SSDHealth {
+    Clear-Host
+    try {
+        Get-PhysicalDisk | ForEach-Object {
+            Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
+            Write-Host "Disco: $($_.DeviceID) | Modelo: $($_.Model)" -ForegroundColor Green
+            Write-Host "Saude: $($_.HealthStatus) | Status: $($_.OperationalStatus) | Tipo: $($_.MediaType)" -ForegroundColor Green
+            Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
         }
+    } catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red }
+    pause; Disk-ManagementMenu
+}
+
+function Check-DiskUsage {
+    param([string]$DriveLetter="C:", [int]$Threshold=0)
+    try {
+        $drive = Get-PSDrive -Name $DriveLetter.TrimEnd(':') -EA Stop
+        $used  = [math]::Round((($drive.Used / ($drive.Free + $drive.Used)) * 100), 2)
+        Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
+        Write-Host "Unidade: $DriveLetter | Computador: $env:COMPUTERNAME | Usuario: $env:USERNAME" -ForegroundColor Green
+        Write-Host "Uso: ${used}% | Total: $([math]::Round(($drive.Free+$drive.Used)/1GB,2))GB | Livre: $([math]::Round($drive.Free/1GB,2))GB | Usado: $([math]::Round($drive.Used/1GB,2))GB" -ForegroundColor Green
+        Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
+        if ($used -ge $Threshold) { Write-Host "ALERTA: ${used}% de uso!" -ForegroundColor Red }
+        if ((Read-Host "Enviar por e-mail? (S/N)") -match "^[Ss]$") {
+            Send-Email -Subject "Disco $DriveLetter - $env:COMPUTERNAME" -Body "Uso: ${used}%`nTotal: $([math]::Round(($drive.Free+$drive.Used)/1GB,2))GB`nLivre: $([math]::Round($drive.Free/1GB,2))GB"
+        } else { Start-Sleep -Seconds 2; Disk-ManagementMenu }
+    } catch { Write-Host "Unidade '$DriveLetter' nao encontrada." -ForegroundColor Red }
+}
+
+function Select-Drive {
+    $drives = Get-PSDrive | Where-Object { $_.Provider -like "*FileSystem*" }
+    if ($drives.Count -eq 0) { Write-Host "Nenhuma unidade encontrada." -ForegroundColor Red; return $null }
+    $drives | ForEach-Object { Write-Host " - $($_.Name):\ ($([math]::Round($_.Used/1GB,2))GB usados / $([math]::Round($_.Free/1GB,2))GB livres)" -ForegroundColor Green }
+    $dl = Read-Host "Letra da unidade (Enter=C)"
+    if ([string]::IsNullOrWhiteSpace($dl)) { $dl = "C" }
+    if ($drives | Where-Object { $_.Name -eq $dl }) { return $dl }
+    Write-Host "Unidade '$dl' nao encontrada." -ForegroundColor Red; return $null
+}
+
+function Schedule-DiskMonitoring {
+    $scriptPath = Join-Path $ScriptsPath "MonitorDisk.ps1"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "Baixando MonitorDisk.ps1..." -ForegroundColor Yellow
+        try { Download-FromGit "Scripts/MonitorDisk.ps1" $scriptPath; Write-Host "OK!" -ForegroundColor Green }
+        catch { Write-Host "Erro: $($_.Exception.Message)" -ForegroundColor Red; return }
+    }
+    if ((Read-Host "Criar agendamento? [S/n] (Enter=SIM)") -and (Read-Host) -notmatch "^[Ss]$") {
+        Disk-ManagementMenu; return
+    }
+    Write-Host "1) Diario  2) Semanal  3) Mensal"
+    $freq = switch (Read-Host "Frequencia") { "1"{"DAILY"} "2"{"WEEKLY"} "3"{"MONTHLY"} default { Write-Host "Invalido."; Disk-ManagementMenu; return } }
+    $taskName = "Monitoramento de Disco"; $taskFolder = "_HTI"
+    $svc = New-Object -ComObject "Schedule.Service"; $svc.Connect()
+    $root = $svc.GetFolder("\")
+    try { $root.GetFolder("\$taskFolder") | Out-Null } catch { $root.CreateFolder("\$taskFolder") | Out-Null }
+    if (Get-ScheduledTask -TaskName $taskName -TaskPath "\$taskFolder\" -EA SilentlyContinue) {
+        if ((Read-Host "Tarefa ja existe. Substituir? (S/N)") -notmatch "^[Ss]$") { Disk-ManagementMenu; return }
+        Unregister-ScheduledTask -TaskName $taskName -TaskPath "\$taskFolder\" -Confirm:$false
+    }
+    $taskPath = "\$taskFolder\$taskName"; $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    switch ($freq) {
+        "DAILY"   { schtasks.exe /Create /F /TN "$taskPath" /TR $cmd /SC DAILY /ST 12:00 /RL HIGHEST /RU "SYSTEM" }
+        "WEEKLY"  { schtasks.exe /Create /F /TN "$taskPath" /TR $cmd /SC WEEKLY /D MON /ST 12:00 /RL HIGHEST /RU "SYSTEM" }
+        "MONTHLY" { schtasks.exe /Create /F /TN "$taskPath" /TR $cmd /SC MONTHLY /D MON /MO FIRST /ST 12:00 /RL HIGHEST /RU "SYSTEM" }
+    }
+    Write-Host "Agendamento criado!" -ForegroundColor Green; pause; Disk-ManagementMenu
+}
+
+function Disk-ManagementMenu {
+    Clear-Host
+    Write-Host "--------------------------------------------------------------" -ForegroundColor Green
+    Write-Host "       Status, Monitoramento e Alertas de Disco" -ForegroundColor Green
+    Write-Host "--------------------------------------------------------------" -ForegroundColor Green
+    Write-Host "1) Saude dos discos"  -ForegroundColor Cyan
+    Write-Host "2) Uso do HD (com e-mail)" -ForegroundColor Cyan
+    Write-Host "3) Agendar monitoramento" -ForegroundColor Cyan
+    Write-Host ""; Write-Host "0) Voltar ao menu principal" -ForegroundColor DarkGreen
+    switch (Read-Host "Opcao") {
+        "1" { Check-SSDHealth }
+        "2" { $dl = Select-Drive; if ($dl) { Check-DiskUsage -DriveLetter $dl -Threshold 90 } }
+        "3" { Schedule-DiskMonitoring }
+        "0" { Clear-Host; return }
+        default { Write-Host "Opcao invalida." -ForegroundColor Red }
     }
 }
 
+# ==============================================================================
+# REMOCAO DE ARQUIVOS TEMPORARIOS DO SCRIPT
+# ==============================================================================
+function Remove-HTIFiles {
+    @((Join-Path $ScriptsPath "Script-Inicial.ps1"), (Join-Path $ScriptsPath "clientes.csv")) |
+        ForEach-Object { if (Test-Path $_) { Remove-Item $_ -Force -EA SilentlyContinue } }
+}
+
+# ==============================================================================
+# CHANGELOG
+# Adicione entradas aqui a cada nova versao
+# ==============================================================================
 function Show-Changelog {
     Clear-Host
     Write-Host "`n--------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "                  HISTORICO DE ALTERACOES" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------`n" -ForegroundColor Cyan
-    Write-Host "[v0.8.1] - Opcao 9 alterada para usar ativador via irm get.activated.win"
-    Write-Host "[v0.8.0] - Migrado para GitHub raw nas rotinas de download"
-    Write-Host "[v0.7.5] - Adicionado reset de rede do Windows"
-    Write-Host "[v0.7.4] - Adicionada checagem de integridade do sistema"
-    Write-Host "[v0.7.3] - Adicionada limpeza da fila de impressao"
-    Write-Host "[v0.7.2] - Adicionada analise do WinSAT"
-    Write-Host "[v0.7.1] - Melhorias gerais"
-    Write-Host "`nPressione qualquer tecla para voltar ao menu principal..."
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    Main
+    Write-Host "[v0.0.3] - Senha de acesso adicionada (suroh)"
+    Write-Host "[v0.0.3] - Opcao 11 agora permite selecionar utilitario individual"
+    Write-Host "[v0.0.3] - Opcao 6 implementada: Java 32/64, PJe Office Pro, Certisign"
+    Write-Host "[v0.0.3] - Logo HTI em DarkBlue, cabecalho simplificado para HORUS TI SOLUCOES"
+    Write-Host "[v0.0.3] - Limpeza completa do historico PS ao sair (opcao 0)"
+    Write-Host "[v0.0.2] - Reset de rede e integridade do sistema adicionados"
+    Write-Host "[v0.0.1] - Versao inicial com estrutura base GitHub"
+    Write-Host "`nPressione qualquer tecla para voltar..."
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'); Main
 }
 
-# =========================
-# MENU PRINCIPAL  <-- CABEÇALHO HTI ADICIONADO
-# =========================
-
+# ==============================================================================
+# MENU PRINCIPAL
+# Para adicionar uma nova opcao:
+# 1) Adicione um Write-Host com o numero e descricao abaixo
+# 2) Adicione o case no switch com a chamada da funcao
+# ==============================================================================
 function Main {
     Clear-Host
     Initialize-HTIStructure
     Remove-HTIFiles
 
     if (-not (Test-Admin)) {
-        Write-Host "ATENCAO: Este script precisa ser executado como administrador.`n" -ForegroundColor Red
+        Write-Host "ATENCAO: Execute como Administrador.`n" -ForegroundColor Red
         Write-Host "Pressione qualquer tecla para sair..."
-        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-        return
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'); return
     }
+
+    # Solicita senha antes de exibir o menu
+    if (-not (Request-AccessPassword)) { return }
 
     do {
         Clear-Host
         Write-Host ""
-        Write-Host "  ██╗  ██╗████████╗██╗" -ForegroundColor Cyan
-        Write-Host "  ██║  ██║╚══██╔══╝██║" -ForegroundColor Cyan
-        Write-Host "  ███████║   ██║   ██║" -ForegroundColor Cyan
-        Write-Host "  ██╔══██║   ██║   ██║" -ForegroundColor Cyan
-        Write-Host "  ██║  ██║   ██║   ██║" -ForegroundColor Cyan
-        Write-Host "  ╚═╝  ╚═╝   ╚═╝   ╚═╝" -ForegroundColor Cyan
+        Write-Host "  ██╗  ██╗████████╗██╗" -ForegroundColor DarkBlue
+        Write-Host "  ██║  ██║╚══██╔══╝██║" -ForegroundColor DarkBlue
+        Write-Host "  ███████║   ██║   ██║" -ForegroundColor DarkBlue
+        Write-Host "  ██╔══██║   ██║   ██║" -ForegroundColor DarkBlue
+        Write-Host "  ██║  ██║   ██║   ██║" -ForegroundColor DarkBlue
+        Write-Host "  ╚═╝  ╚═╝   ╚═╝   ╚═╝" -ForegroundColor DarkBlue
         Write-Host ""
         Write-Host "--------------------------------------------------------------" -ForegroundColor Blue
-        Write-Host "             SETUP-01 - HORUS TI SOLUCOES" -ForegroundColor Cyan
+        Write-Host "                  HORUS TI SOLUCOES" -ForegroundColor White
         Write-Host "--------------------------------------------------------------`n" -ForegroundColor Blue
-        Write-Host "Versao: 0.8.1`n" -ForegroundColor DarkGray
-        Write-Host "1) Exibir Informacoes do Windows" -ForegroundColor Green
-        Write-Host "2) Renomear o computador" -ForegroundColor Green
-        Write-Host "3) Instalacao do agente TiFlux" -ForegroundColor Green
-        Write-Host "4) Instalacao do Endpoint Bitdefender - PENDENTE" -ForegroundColor DarkGray
-        Write-Host "5) Instalacao do pacote basico de programas" -ForegroundColor Green
-        Write-Host "6) Instalacao do pacote de programas juridicos - PENDENTE" -ForegroundColor DarkGray
-        Write-Host "7) Instalacao do pacote de programas contabeis - PENDENTE" -ForegroundColor DarkGray
-        Write-Host "8) Instalacao do Office" -ForegroundColor Green
-        Write-Host "9) Ativacao do Windows e Office" -ForegroundColor Green
-        Write-Host "10) Remove Apps desnecessarios" -ForegroundColor Green
-        Write-Host "11) Baixar aplicativos utilitarios {DiskUse, BSOD, Sysinternals...}" -ForegroundColor Green
-        Write-Host "12) Gerenciador de Usuarios Locais" -ForegroundColor Green
-        Write-Host "13) Ferramentas e Otimizacoes" -ForegroundColor Green
-        Write-Host "14) Monitorar uso do HD e envio de alertas" -ForegroundColor Green
+        Write-Host "Versao: 0.0.3`n" -ForegroundColor DarkGray
+
+        Write-Host "1)  Exibir Informacoes do Windows"                              -ForegroundColor Green
+        Write-Host "2)  Renomear o computador"                                      -ForegroundColor Green
+        Write-Host "3)  Instalacao do agente TiFlux"                                -ForegroundColor Green
+        Write-Host "4)  Instalacao do Endpoint Bitdefender - PENDENTE"              -ForegroundColor DarkGray
+        Write-Host "5)  Instalacao do pacote basico de programas"                   -ForegroundColor Green
+        Write-Host "6)  Pacote juridico (Java, PJe Office, Certisign)"              -ForegroundColor Green
+        Write-Host "7)  Pacote contabil - PENDENTE"                                 -ForegroundColor DarkGray
+        Write-Host "8)  Instalacao do Office"                                       -ForegroundColor Green
+        Write-Host "9)  Ativacao do Windows e Office"                               -ForegroundColor Green
+        Write-Host "10) Remove Apps desnecessarios"                                 -ForegroundColor Green
+        Write-Host "11) Baixar aplicativos utilitarios (selecionar)"                -ForegroundColor Green
+        Write-Host "12) Gerenciador de Usuarios Locais"                             -ForegroundColor Green
+        Write-Host "13) Ferramentas e Otimizacoes"                                  -ForegroundColor Green
+        Write-Host "14) Monitorar uso do HD e envio de alertas"                     -ForegroundColor Green
         Write-Host ""
-        Write-Host "0) Sair - Limpa historico"
+        Write-Host "99) Changelog"                                                  -ForegroundColor DarkGray
+        Write-Host "0)  Sair - Limpa historico"
 
         $mainOption = Read-Host "`nEscolha uma opcao"
 
         switch ($mainOption) {
-            "1"  { Write-Host "Aguarde, coletando informacoes do Windows..." -ForegroundColor Yellow; Info-Windows }
+            "1"  { Write-Host "Coletando informacoes..." -ForegroundColor Yellow; Info-Windows }
             "2"  { Rename-ComputerCustom }
             "3"  { Install-Agente }
-            "4"  { Install-Bitdefender }
+            "4"  { Write-Host "Pendente." -ForegroundColor Yellow; pause }
             "5"  { Install-BasicPackage }
             "6"  { Install-LegalPackage }
-            "7"  { Install-AccountingPackage }
+            "7"  { Write-Host "Pendente." -ForegroundColor Yellow; pause }
             "8"  { Install-Office }
             "9"  { Activate-WindowsOffice }
             "10" { Remove-Apps }
@@ -2070,17 +1463,14 @@ function Main {
             "14" { Disk-ManagementMenu }
             "99" { Show-Changelog }
             "0"  {
-                Write-Host "Limpando historico powershell..." -ForegroundColor Red
-                Start-Sleep -Seconds 2
+                Write-Host "Limpando historico e saindo..." -ForegroundColor Red
+                Start-Sleep -Seconds 1
                 Remove-HTIFiles
-                try {
-                    [System.IO.File]::WriteAllText((Get-PSReadLineOption).HistorySavePath, "")
-                } catch {}
-                Clear-History -ErrorAction SilentlyContinue
+                Clear-AllPSHistory
                 Clear-Host
                 return
             }
-            default { Write-Host "Opcao invalida. Tente novamente." }
+            default { Write-Host "Opcao invalida." }
         }
     } while ($mainOption -ne "0")
 }
